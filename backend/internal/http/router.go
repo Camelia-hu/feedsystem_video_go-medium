@@ -42,7 +42,12 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 		log.Printf("PopularityMQ init failed (mq disabled): %v", err)
 		popularityMQ = nil
 	}
-	videoService := video.NewVideoService(videoRepository, cache, popularityMQ)
+	videoMQ, err := rabbitmq.NewVideoMQ(rmq)
+	if err != nil {
+		log.Printf("VideoMQ init failed (mq disabled): %v", err)
+		videoMQ = nil
+	}
+	videoService := video.NewVideoService(videoRepository, cache, popularityMQ, videoMQ)
 	videoHandler := video.NewVideoHandler(videoService, accountService)
 	videoGroup := r.Group("/video")
 	{
@@ -118,6 +123,9 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	feedGroup := r.Group("/feed")
 	feedGroup.Use(jwt.SoftJWTAuth(accountRepository, cache))
 	{
+		// 统一入口：通过 query_type 分派（latest/order_by_likes/order_by_popularity/followings）
+		feedGroup.POST("/list", feedHandler.FetchFeeds)
+		// 旧接口保留向后兼容
 		feedGroup.POST("/listLatest", feedHandler.ListLatest)
 		feedGroup.POST("/listLikesCount", feedHandler.ListLikesCount)
 		feedGroup.POST("/listByPopularity", feedHandler.ListByPopularity)

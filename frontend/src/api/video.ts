@@ -19,8 +19,8 @@ export function uploadCover(file: File) {
   return postForm<UploadResponse>('/video/uploadCover', fd, { authRequired: true })
 }
 
-export function listByAuthorId(authorId: number) {
-  return postJson<Video[]>('/video/listByAuthorID', { author_id: authorId })
+export function listByAuthorId(authorId: number, offset?: number) {
+  return postJson<Video[]>('/video/listByAuthorID', { author_id: authorId, offset: offset ?? 0 })
 }
 
 export function getDetail(id: number) {

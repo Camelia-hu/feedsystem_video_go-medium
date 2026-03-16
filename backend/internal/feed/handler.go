@@ -15,6 +15,28 @@ func NewFeedHandler(service *FeedService) *FeedHandler {
 	return &FeedHandler{service: service}
 }
 
+// FetchFeeds 统一 feed 流入口，通过 query_type 区分不同场景
+func (f *FeedHandler) FetchFeeds(c *gin.Context) {
+	var req FetchFeedsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Limit <= 0 || req.Limit > 50 {
+		req.Limit = 10
+	}
+	viewerID, err := jwt.GetAccountID(c)
+	if err != nil {
+		viewerID = 0
+	}
+	resp, err := f.service.FetchFeeds(c.Request.Context(), &req, viewerID)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, resp)
+}
+
 func (f *FeedHandler) ListLatest(c *gin.Context) {
 	var req ListLatestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,24 +78,14 @@ func (f *FeedHandler) ListLikesCount(c *gin.Context) {
 			c.JSON(400, gin.H{"error": "likes_count_before and id_before must be provided together"})
 			return
 		}
-
 		likesCountBefore := *req.LikesCountBefore
 		idBefore := *req.IDBefore
-
 		if likesCountBefore < 0 {
 			c.JSON(400, gin.H{"error": "invalid cursor: likes_count_before must be >= 0"})
 			return
 		}
-		if idBefore == 0 {
-			if likesCountBefore != 0 {
-				c.JSON(400, gin.H{"error": "invalid cursor: id_before must be > 0"})
-				return
-			}
-		} else {
-			cursor = &LikesCountCursor{
-				LikesCount: likesCountBefore,
-				ID:         idBefore,
-			}
+		if idBefore != 0 {
+			cursor = &LikesCountCursor{LikesCount: likesCountBefore, ID: idBefore}
 		}
 	}
 	viewerAccountID, err := jwt.GetAccountID(c)
@@ -127,15 +139,14 @@ func (f *FeedHandler) ListByPopularity(c *gin.Context) {
 		viewerAccountID = 0
 	}
 
-	var latestPopularity int64
-	var latestBefore time.Time
-	var latestIDBefore uint
-
 	if req.LatestPopularity < 0 {
 		c.JSON(400, gin.H{"error": "latest_popularity must be >= 0"})
 		return
 	}
 
+	var latestPopularity int64
+	var latestBefore time.Time
+	var latestIDBefore uint
 	anyCursor := !req.LatestBefore.IsZero() || req.LatestIDBefore != nil
 	if anyCursor {
 		if req.LatestBefore.IsZero() || req.LatestIDBefore == nil || *req.LatestIDBefore == 0 {

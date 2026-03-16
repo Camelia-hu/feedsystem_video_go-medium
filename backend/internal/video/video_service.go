@@ -18,16 +18,18 @@ type VideoService struct {
 	cache        *rediscache.Client
 	cacheTTL     time.Duration
 	popularityMQ *rabbitmq.PopularityMQ
+	videoMQ      *rabbitmq.VideoMQ
 }
 
-func NewVideoService(repo *VideoRepository, cache *rediscache.Client, popularityMQ *rabbitmq.PopularityMQ) *VideoService {
-	return &VideoService{repo: repo, cache: cache, cacheTTL: 5 * time.Minute, popularityMQ: popularityMQ}
+func NewVideoService(repo *VideoRepository, cache *rediscache.Client, popularityMQ *rabbitmq.PopularityMQ, videoMQ *rabbitmq.VideoMQ) *VideoService {
+	return &VideoService{repo: repo, cache: cache, cacheTTL: 5 * time.Minute, popularityMQ: popularityMQ, videoMQ: videoMQ}
 }
 
 func (vs *VideoService) Publish(ctx context.Context, video *Video) error {
 	if video == nil {
 		return errors.New("video is nil")
 	}
+
 	video.Title = strings.TrimSpace(video.Title)
 	video.PlayURL = strings.TrimSpace(video.PlayURL)
 	video.CoverURL = strings.TrimSpace(video.CoverURL)
@@ -41,9 +43,24 @@ func (vs *VideoService) Publish(ctx context.Context, video *Video) error {
 	if video.CoverURL == "" {
 		return errors.New("cover url is required")
 	}
+	// 主链路首先保证数据落入源数据库
 	if err := vs.repo.CreateVideo(ctx, video); err != nil {
 		return err
 	}
+
+	if vs.videoMQ != nil {
+		// 异步保证推模式下数据落入每个关注用户收件箱里面
+		err := vs.videoMQ.PublishInbox(ctx, video.ID, video.AuthorID)
+		if err != nil {
+			return errors.New("failed to publish inboxMQ")
+		}
+		// 异步写进自己的发件箱
+		err = vs.videoMQ.PublishOutbox(ctx, video.ID, video.AuthorID)
+		if err != nil {
+			return errors.New("failed to publish outboxMQ")
+		}
+	}
+
 	return nil
 }
 
@@ -68,21 +85,24 @@ func (vs *VideoService) Delete(ctx context.Context, id uint, authorID uint) erro
 	return nil
 }
 
-func (vs *VideoService) ListByAuthorID(ctx context.Context, authorID uint) ([]Video, error) {
-	videos, err := vs.repo.ListByAuthorID(ctx, int64(authorID))
+func (vs *VideoService) ListByAuthorID(ctx context.Context, authorID uint, offset int) ([]Video, error) {
+	videos, err := vs.repo.ListByAuthorID(ctx, int64(authorID), 20, offset)
 	if err != nil {
 		return nil, err
 	}
 	return videos, nil
 }
 
+// hotThreshold 访问次数超过此值才视为热点视频并写入缓存
+const hotThreshold = 3
+
 func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) {
 	cacheKey := fmt.Sprintf("video:detail:id=%d", id)
+	hitKey := fmt.Sprintf("video:detail:hits:id=%d", id)
 
 	getCached := func() (*Video, bool) {
 		opCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
-
 		b, err := vs.cache.GetBytes(opCtx, cacheKey)
 		if err != nil {
 			return nil, false
@@ -105,32 +125,33 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 	}
 
 	if vs.cache != nil {
+		// 热点视频直接从缓存返回
 		if v, ok := getCached(); ok {
 			return v, nil
 		}
 
+		// 缓存未命中：累加访问计数，判断是否到达热点阈值
 		opCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-		b, err := vs.cache.GetBytes(opCtx, cacheKey)
+		hits, _ := vs.cache.Incr(opCtx, hitKey)
+		// 首次计数时设置 TTL，避免计数 key 永久占用内存
+		if hits == 1 {
+			_ = vs.cache.Expire(opCtx, hitKey, time.Hour)
+		}
 		cancel()
-		if err == nil {
-			var cached Video
-			if err := json.Unmarshal(b, &cached); err == nil {
-				return &cached, nil
-			}
-		} else if rediscache.IsMiss(err) {
-			lockKey := "lock:" + cacheKey
 
+		// 达到热点阈值：做缓存击穿防护后写入缓存
+		if hits >= hotThreshold {
+			lockKey := "lock:" + cacheKey
 			lockCtx, lockCancel := context.WithTimeout(ctx, 50*time.Millisecond)
 			token, locked, lockErr := vs.cache.Lock(lockCtx, lockKey, 2*time.Second)
 			lockCancel()
 
 			if lockErr == nil && locked {
 				defer func() { _ = vs.cache.Unlock(context.Background(), lockKey, token) }()
-
+				// double-check：可能其他协程已经回填
 				if v, ok := getCached(); ok {
 					return v, nil
 				}
-
 				video, err := vs.repo.GetByID(ctx, id)
 				if err != nil {
 					return nil, err
@@ -139,7 +160,7 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 				return video, nil
 			}
 
-			// 没拿到锁：等待别人回填缓存
+			// 没抢到锁：等待持锁协程回填缓存
 			for i := 0; i < 5; i++ {
 				select {
 				case <-ctx.Done():
@@ -153,14 +174,8 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 		}
 	}
 
-	video, err := vs.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if vs.cache != nil {
-		setCached(video)
-	}
-	return video, nil
+	// 冷门视频直接查 DB，不写缓存
+	return vs.repo.GetByID(ctx, id)
 }
 
 func (vs *VideoService) UpdateLikesCount(ctx context.Context, id uint, likesCount int64) error {

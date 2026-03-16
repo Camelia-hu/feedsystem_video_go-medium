@@ -90,6 +90,49 @@ func (repo *FeedRepository) ListByPopularity(ctx context.Context, limit int, pop
 	return videos, nil
 }
 
+// ListByFollowingInbox 从推送收件箱读取关注流
+// 返回按 inbox score 排序的视频列表，以及下一页游标 nextScore
+func (repo *FeedRepository) ListByFollowingInbox(ctx context.Context, userID uint, maxScore int64, limit int) ([]*video.Video, int64, error) {
+	var items []video.FollowFeedInbox
+	q := repo.db.WithContext(ctx).
+		Where("user_id = ? AND is_deleted = 0", userID)
+	if maxScore > 0 {
+		q = q.Where("score < ?", maxScore)
+	}
+	if err := q.Order("score DESC, id DESC").Limit(limit).Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(items) == 0 {
+		return []*video.Video{}, 0, nil
+	}
+
+	postIDs := make([]uint, 0, len(items))
+	for _, item := range items {
+		postIDs = append(postIDs, uint(item.PostID))
+	}
+
+	var rawVideos []*video.Video
+	if err := repo.db.WithContext(ctx).Where("id IN ?", postIDs).Find(&rawVideos).Error; err != nil {
+		return nil, 0, err
+	}
+
+	videoMap := make(map[uint]*video.Video, len(rawVideos))
+	for _, v := range rawVideos {
+		videoMap[v.ID] = v
+	}
+
+	// 按 inbox score 顺序重排，保持时间线一致性
+	result := make([]*video.Video, 0, len(items))
+	for _, item := range items {
+		if v, ok := videoMap[uint(item.PostID)]; ok {
+			result = append(result, v)
+		}
+	}
+
+	nextScore := items[len(items)-1].Score
+	return result, nextScore, nil
+}
+
 func (repo *FeedRepository) GetByIDs(ctx context.Context, ids []uint) ([]*video.Video, error) {
 	var videos []*video.Video
 	if len(ids) == 0 {

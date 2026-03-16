@@ -202,7 +202,7 @@ func (vh *VideoHandler) ListByAuthorID(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	videos, err := vh.service.ListByAuthorID(c.Request.Context(), req.AuthorID)
+	videos, err := vh.service.ListByAuthorID(c.Request.Context(), req.AuthorID, req.Offset)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return

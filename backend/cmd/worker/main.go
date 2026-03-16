@@ -34,6 +34,10 @@ const (
 	popularityExchange   = "video.popularity.events"
 	popularityQueue      = "video.popularity.events"
 	popularityBindingKey = "video.popularity.*"
+
+	videoExchange   = "video.box.events"
+	videoQueue      = "video.box.events"
+	videoBindingKey = "video.box.*" // 重命名
 )
 
 func main() {
@@ -90,6 +94,9 @@ func main() {
 	if err := declareCommentTopology(ch); err != nil {
 		log.Fatalf("Failed to declare comment topology: %v", err)
 	}
+	if err := declareVideoTopology(ch); err != nil {
+		log.Fatalf("Failed to declare video topology: %v", err)
+	}
 	if cache != nil {
 		if err := declarePopularityTopology(ch); err != nil {
 			log.Fatalf("Failed to declare popularity topology: %v", err)
@@ -99,13 +106,14 @@ func main() {
 		log.Fatalf("Failed to set qos: %v", err)
 	}
 
-	repo := social.NewSocialRepository(sqlDB)
-	socialWorker := worker.NewSocialWorker(ch, repo, socialQueue)
+	socialRepo := social.NewSocialRepository(sqlDB)
+	socialWorker := worker.NewSocialWorker(ch, socialRepo, socialQueue)
 	videoRepo := video.NewVideoRepository(sqlDB)
 	likeRepo := video.NewLikeRepository(sqlDB)
 	commentRepo := video.NewCommentRepository(sqlDB)
 	likeWorker := worker.NewLikeWorker(ch, likeRepo, videoRepo, likeQueue)
 	commentWorker := worker.NewCommentWorker(ch, commentRepo, videoRepo, commentQueue)
+	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, videoQueue)
 	var popularityWorker *worker.PopularityWorker
 	if cache != nil {
 		popularityWorker = worker.NewPopularityWorker(ch, cache, popularityQueue)
@@ -121,6 +129,8 @@ func main() {
 	go func() { errCh <- likeWorker.Run(ctx) }()
 	log.Printf("Worker started, consuming queue=%s", commentQueue)
 	go func() { errCh <- commentWorker.Run(ctx) }()
+	go func() { errCh <- videoWorker.Run(ctx) }()
+	log.Printf("Worker started, consuming queue=%s", videoQueue)
 	if popularityWorker != nil {
 		log.Printf("Worker started, consuming queue=%s", popularityQueue)
 		go func() { errCh <- popularityWorker.Run(ctx) }()
@@ -267,6 +277,40 @@ func declareCommentTopology(ch *amqp.Channel) error {
 		q.Name,
 		commentBindingKey,
 		commentExchange,
+		false,
+		nil,
+	)
+}
+
+func declareVideoTopology(ch *amqp.Channel) error {
+	if err := ch.ExchangeDeclare(
+		videoExchange,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	); err != nil {
+		return err
+	}
+
+	q, err := ch.QueueDeclare(
+		videoQueue,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	return ch.QueueBind(
+		q.Name,
+		videoBindingKey,
+		videoExchange,
 		false,
 		nil,
 	)

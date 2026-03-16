@@ -2,6 +2,15 @@ package feed
 
 import "time"
 
+type QueryType string
+
+const (
+	Latest            QueryType = "latest"
+	OrderByLikes      QueryType = "order_by_likes"
+	Followings        QueryType = "followings"
+	OrderByPopularity QueryType = "order_by_popularity"
+)
+
 type FeedAuthor struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
@@ -19,6 +28,18 @@ type FeedVideoItem struct {
 	IsLiked     bool       `json:"is_liked"`
 }
 
+type FetchFeedsRequest struct {
+	QType  QueryType `json:"query_type"`
+	Limit  int       `json:"limit"`
+	UserID uint64    `json:"user_id,omitempty"` // 预留：profile tab 场景
+	Bucket *string   `json:"bucket,omitempty"`  // 客户端回传上次响应中的游标状态
+}
+
+type FetchFeedsResponse struct {
+	VideoList []FeedVideoItem `json:"video_list"`
+	HasMore   bool            `json:"has_more"`
+	Bucket    *string         `json:"bucket"` // 客户端下次请求时原样带回
+}
 type ListLatestRequest struct {
 	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`

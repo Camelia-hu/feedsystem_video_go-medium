@@ -16,3 +16,11 @@ func (c *Client) SetBytes(ctx context.Context, key string, value []byte, ttl tim
 func (c *Client) Del(ctx context.Context, key string) error {
 	return c.rdb.Del(ctx, key).Err()
 }
+
+// Incr 对 key 做原子自增，返回自增后的值
+func (c *Client) Incr(ctx context.Context, key string) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, nil
+	}
+	return c.rdb.Incr(ctx, key).Result()
+}

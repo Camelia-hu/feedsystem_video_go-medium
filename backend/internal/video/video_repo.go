@@ -3,6 +3,8 @@ package video
 import (
 	"context"
 	"errors"
+	"feedsystem_video_go/internal/account"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -29,16 +31,64 @@ func (vr *VideoRepository) DeleteVideo(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (vr *VideoRepository) ListByAuthorID(ctx context.Context, authorID int64) ([]Video, error) {
-	var videos []Video
+// ListByAuthorID 这里修改为两次查询，后续会进一步修改为一次查询
+func (vr *VideoRepository) ListByAuthorID(ctx context.Context, authorID int64, limit, offset int) ([]Video, error) {
+	if authorID == 0 {
+		return nil, errors.New("authorID is required")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	var outboxes []FeedOutbox
 	if err := vr.db.WithContext(ctx).
 		Where("author_id = ?", authorID).
-		Order("create_time desc").
-		Offset(0).
+		Order("score DESC, id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&outboxes).Error; err != nil {
+		return nil, err
+	}
+
+	if len(outboxes) == 0 {
+		// outbox 无数据时降级直接查 video 表，保证个人主页始终有内容
+		var videos []Video
+		if err := vr.db.WithContext(ctx).
+			Where("author_id = ?", authorID).
+			Order("create_time DESC, id DESC").
+			Limit(limit).
+			Offset(offset).
+			Find(&videos).Error; err != nil {
+			return nil, err
+		}
+		return videos, nil
+	}
+
+	postIDs := make([]int64, 0, len(outboxes))
+	for _, item := range outboxes {
+		postIDs = append(postIDs, item.PostID)
+	}
+
+	var videos []Video
+	if err := vr.db.WithContext(ctx).
+		Where("id IN ?", postIDs).
 		Find(&videos).Error; err != nil {
 		return nil, err
 	}
-	return videos, nil
+
+	videoMap := make(map[int64]Video, len(videos))
+	for _, v := range videos {
+		videoMap[int64(v.ID)] = v
+	}
+
+	result := make([]Video, 0, len(outboxes))
+	for _, item := range outboxes {
+		if v, ok := videoMap[item.PostID]; ok {
+			result = append(result, v)
+		}
+	}
+
+	return result, nil
 }
 
 func (vr *VideoRepository) GetByID(ctx context.Context, id uint) (*Video, error) {
@@ -94,4 +144,56 @@ func (vr *VideoRepository) ChangePopularity(ctx context.Context, id uint, change
 		return err
 	}
 	return nil
+}
+
+
+func (vr *VideoRepository) BatchInsertFollowFeedInbox(ctx context.Context, followers []*account.Account, postID int64, authorID int64, score int64) error {
+	if len(followers) == 0 {
+		return nil
+	}
+	if postID == 0 || authorID == 0 {
+		return errors.New("postID and authorID are required")
+	}
+
+	now := time.Now()
+	items := make([]FollowFeedInbox, 0, len(followers))
+
+	for _, follower := range followers {
+		if follower.ID == 0 {
+			continue
+		}
+		items = append(items, FollowFeedInbox{
+			UserID:    int64(follower.ID),
+			PostID:    postID,
+			AuthorID:  authorID,
+			Score:     score,
+			IsRead:    0,
+			IsDeleted: 0,
+			CreatedAt: now,
+		})
+	}
+
+	if len(items) == 0 {
+		return nil
+	}
+
+	return vr.db.WithContext(ctx).CreateInBatches(items, 500).Error
+}
+
+func (vr *VideoRepository) InsertFeedOutbox(ctx context.Context, authorID int64, postID int64, score int64) error {
+	if authorID == 0 || postID == 0 {
+		return errors.New("authorID and postID are required")
+	}
+	if score == 0 {
+		score = time.Now().UnixMilli()
+	}
+
+	item := FeedOutbox{
+		AuthorID:  authorID,
+		PostID:    postID,
+		Score:     score,
+		CreatedAt: time.Now(),
+	}
+
+	return vr.db.WithContext(ctx).Create(&item).Error
 }

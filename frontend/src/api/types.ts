@@ -74,6 +74,20 @@ export type ListByFollowingResponse = {
   has_more: boolean
 }
 
+export type QueryType = 'latest' | 'order_by_likes' | 'order_by_popularity' | 'followings'
+
+export type FetchFeedsRequest = {
+  query_type: QueryType
+  limit: number
+  bucket?: string
+}
+
+export type FetchFeedsResponse = {
+  video_list: FeedVideoItem[]
+  has_more: boolean
+  bucket: string
+}
+
 export type IsLikedResponse = {
   is_liked: boolean
 }
