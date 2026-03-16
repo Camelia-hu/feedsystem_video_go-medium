@@ -52,6 +52,16 @@ func (r *SocialRepository) GetAllFollowers(ctx context.Context, VloggerID uint) 
 	return followers, nil
 }
 
+// CountFollowers 返回指定作者的粉丝总数，用于大 V 阈值判断
+// 只做 COUNT(*)，不拉 Account 记录，避免大粉丝量时的无效开销
+func (r *SocialRepository) CountFollowers(ctx context.Context, vloggerID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&Social{}).
+		Where("vlogger_id = ?", vloggerID).
+		Count(&count).Error
+	return count, err
+}
+
 // GetFollowersBatch 游标分页拉取粉丝
 // lastRelationID=0 表示从头开始；返回本批粉丝账号及下一页游标（social 表的最后一条 id）
 func (r *SocialRepository) GetFollowersBatch(ctx context.Context, vloggerID uint, lastRelationID uint, limit int) ([]*account.Account, uint, error) {
@@ -86,6 +96,24 @@ func (r *SocialRepository) GetFollowersBatch(ctx context.Context, vloggerID uint
 
 	nextCursor := relations[len(relations)-1].ID
 	return followers, nextCursor, nil
+}
+
+// GetFollowingIDs 返回用户关注的所有作者 ID，不拉 Account 对象
+// 供 feed 层构造 outbox 查询用，避免不必要的 JOIN
+func (r *SocialRepository) GetFollowingIDs(ctx context.Context, followerID uint) ([]uint, error) {
+	var relations []Social
+	if err := r.db.WithContext(ctx).
+		Model(&Social{}).
+		Select("vlogger_id").
+		Where("follower_id = ?", followerID).
+		Find(&relations).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, len(relations))
+	for _, rel := range relations {
+		ids = append(ids, rel.VloggerID)
+	}
+	return ids, nil
 }
 
 func (r *SocialRepository) GetAllVloggers(ctx context.Context, FollowerID uint) ([]*account.Account, error) {

@@ -19,7 +19,7 @@ type FeedService struct {
 	listerMap map[QueryType]FeedLister
 }
 
-func NewFeedService(repo *FeedRepository, likeRepo *video.LikeRepository, cache *rediscache.Client) *FeedService {
+func NewFeedService(repo *FeedRepository, likeRepo *video.LikeRepository, cache *rediscache.Client, socialRepo socialFollowingReader) *FeedService {
 	svc := &FeedService{
 		repo:     repo,
 		likeRepo: likeRepo,
@@ -28,7 +28,7 @@ func NewFeedService(repo *FeedRepository, likeRepo *video.LikeRepository, cache 
 	}
 	svc.listerMap = map[QueryType]FeedLister{
 		Latest:            &latestLister{repo: repo},
-		Followings:        &followingsLister{repo: repo},
+		Followings:        &followingsLister{repo: repo, socialRepo: socialRepo, cache: cache},
 		OrderByLikes:      &likesLister{repo: repo},
 		OrderByPopularity: &popularityLister{repo: repo, cache: cache},
 	}

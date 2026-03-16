@@ -58,6 +58,36 @@ func (c *Client) ZRevRangeByScore(ctx context.Context, key string, max, min stri
 	}).Result()
 }
 
+// ZItem ZSET 成员及其分数，供调用方做游标翻页用
+type ZItem struct {
+	Member string
+	Score  int64
+}
+
+// ZRevRangeByScoreWithScores 按 score 降序范围查询，同时返回成员和分数
+// max/min 支持 "+inf"/"-inf" 以及 "(score" 前缀表示开区间（不含端点）
+// 专为游标翻页设计：调用方可以直接取 items[last].Score 作为下一页游标
+func (c *Client) ZRevRangeByScoreWithScores(ctx context.Context, key, max, min string, count int64) ([]ZItem, error) {
+	if c == nil || c.rdb == nil {
+		return nil, nil
+	}
+	zs, err := c.rdb.ZRevRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
+		Max:   max,
+		Min:   min,
+		Count: count,
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]ZItem, 0, len(zs))
+	for _, z := range zs {
+		if m, ok := z.Member.(string); ok {
+			items = append(items, ZItem{Member: m, Score: int64(z.Score)})
+		}
+	}
+	return items, nil
+}
+
 // ZAddBatchInbox 使用 Pipeline 批量向多个收件箱 ZSET 写入同一条记录
 // 每个 key 执行：ZADD + ZREMRANGEBYRANK（裁剪到 maxLen）+ EXPIRE（刷新 TTL）
 // 所有命令在一次网络往返中发送，比循环调用 ZAdd 效率高得多

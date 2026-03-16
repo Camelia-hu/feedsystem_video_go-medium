@@ -19,15 +19,19 @@ import (
 )
 
 type VideoWorker struct {
-	ch         *amqp.Channel
-	videoRepo  *video.VideoRepository
-	socialRepo *social.SocialRepository
-	cache      *rediscache.Client
-	queue      string
+	ch             *amqp.Channel
+	videoRepo      *video.VideoRepository
+	socialRepo     *social.SocialRepository
+	cache          *rediscache.Client
+	queue          string
+	bigVThreshold  int64 // 粉丝数超过此值视为大 V，跳过写扩散改用读扩散
 }
 
-func NewVideoWorker(ch *amqp.Channel, videoRepo *video.VideoRepository, socialRepo *social.SocialRepository, cache *rediscache.Client, queue string) *VideoWorker {
-	return &VideoWorker{ch: ch, videoRepo: videoRepo, socialRepo: socialRepo, cache: cache, queue: queue}
+func NewVideoWorker(ch *amqp.Channel, videoRepo *video.VideoRepository, socialRepo *social.SocialRepository, cache *rediscache.Client, queue string, bigVThreshold int64) *VideoWorker {
+	if bigVThreshold <= 0 {
+		bigVThreshold = 1000
+	}
+	return &VideoWorker{ch: ch, videoRepo: videoRepo, socialRepo: socialRepo, cache: cache, queue: queue, bigVThreshold: bigVThreshold}
 }
 
 func (w *VideoWorker) Run(ctx context.Context) error {
@@ -84,10 +88,27 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 		return nil
 	}
 
+	// score 统一用事件发生时间，保证同一视频在 inbox 和 outbox 里的 score 完全一致
+	// 不能在 Worker 里 time.Now()：两条消息处理时间不同会导致 score 偏差，lister 合并时排序错乱
+	score := evt.OccurredAt.UnixMilli()
+	if score <= 0 {
+		score = time.Now().UnixMilli()
+	}
+
 	switch evt.Action {
 	case "publish_inbox":
+		// 大 V 判断：先查粉丝数，超过阈值跳过写扩散
+		// 大 V 的关注流由 lister 读时从 outbox 拉取，publish_outbox 事件会单独处理
+		followerCount, err := w.socialRepo.CountFollowers(ctx, evt.AuthorID)
+		if err != nil {
+			return err
+		}
+		if followerCount >= w.bigVThreshold {
+			log.Printf("video worker: author %d is big V (%d followers), skip inbox fanout", evt.AuthorID, followerCount)
+			return nil
+		}
+
 		const batchSize = 500
-		score := time.Now().UnixMilli()
 		var lastRelationID uint
 		for {
 			followers, nextCursor, err := w.socialRepo.GetFollowersBatch(ctx, evt.AuthorID, lastRelationID, batchSize)
@@ -107,7 +128,8 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 				}
 				return err
 			}
-				// 构造这批粉丝的 inbox key，key 的格式定义在调用方而非 redis 层
+
+			// 构造这批粉丝的 inbox key，key 的格式定义在调用方而非 redis 层
 			inboxKeys := make([]string, 0, len(followers))
 			for _, f := range followers {
 				inboxKeys = append(inboxKeys, fmt.Sprintf("follow:inbox:%d", f.ID))
@@ -125,7 +147,18 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 		return nil
 
 	case "publish_outbox":
-		err := w.videoRepo.InsertFeedOutbox(ctx, int64(evt.AuthorID), int64(evt.VideoID), time.Now().UnixMilli())
+		// 只有大 V 才写 outbox（读扩散）
+		// 普通作者已通过 publish_inbox 写入粉丝收件箱，不再写 outbox，避免读时去重
+		followerCount, err := w.socialRepo.CountFollowers(ctx, evt.AuthorID)
+		if err != nil {
+			return err
+		}
+		if followerCount < w.bigVThreshold {
+			log.Printf("video worker: author %d is not big V (%d followers), skip outbox write", evt.AuthorID, followerCount)
+			return nil
+		}
+
+		err = w.videoRepo.InsertFeedOutbox(ctx, int64(evt.AuthorID), int64(evt.VideoID), score)
 		if err != nil {
 			var mysqlErr *mysql.MySQLError
 			if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {

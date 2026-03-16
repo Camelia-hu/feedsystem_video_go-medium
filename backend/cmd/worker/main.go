@@ -113,7 +113,7 @@ func main() {
 	commentRepo := video.NewCommentRepository(sqlDB)
 	likeWorker := worker.NewLikeWorker(ch, likeRepo, videoRepo, likeQueue)
 	commentWorker := worker.NewCommentWorker(ch, commentRepo, videoRepo, commentQueue)
-	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, cache, videoQueue)
+	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, cache, videoQueue, 1000)
 	var popularityWorker *worker.PopularityWorker
 	if cache != nil {
 		popularityWorker = worker.NewPopularityWorker(ch, cache, popularityQueue)

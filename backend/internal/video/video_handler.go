@@ -104,8 +104,8 @@ func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 	urlPath := path.Join("/static", "videos", fmt.Sprintf("%d", authorId), date, filename)
 
 	c.JSON(http.StatusOK, gin.H{
-		"url":      buildAbsoluteURL(c, urlPath),
-		"play_url": buildAbsoluteURL(c, urlPath),
+		"url":      urlPath,
+		"play_url": urlPath,
 	})
 }
 
@@ -156,8 +156,8 @@ func (vh *VideoHandler) UploadCover(c *gin.Context) {
 	urlPath := path.Join("/static", "covers", fmt.Sprintf("%d", authorId), date, filename)
 
 	c.JSON(http.StatusOK, gin.H{
-		"url":       buildAbsoluteURL(c, urlPath),
-		"cover_url": buildAbsoluteURL(c, urlPath),
+		"url":       urlPath,
+		"cover_url": urlPath,
 	})
 }
 
@@ -167,16 +167,6 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func buildAbsoluteURL(c *gin.Context, p string) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
-		scheme = xf
-	}
-	return fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, p)
-}
 
 func (vh *VideoHandler) DeleteVideo(c *gin.Context) {
 	var req DeleteVideoRequest

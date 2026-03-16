@@ -133,6 +133,56 @@ func (repo *FeedRepository) ListByFollowingInbox(ctx context.Context, userID uin
 	return result, nextScore, nil
 }
 
+// GetOutboxByAuthors 拉取指定作者列表的发件箱内容，按 score 降序，支持游标翻页
+// 用于关注流读扩散：大 V 不 fanout inbox，由此方法在读时按需拉取
+// scoreBefore=0 表示首页；>0 表示拉 score 严格小于该值的下一页
+func (repo *FeedRepository) GetOutboxByAuthors(ctx context.Context, authorIDs []uint, scoreBefore int64, limit int) ([]*video.Video, int64, error) {
+	if len(authorIDs) == 0 {
+		return nil, 0, nil
+	}
+
+	var outboxes []video.FeedOutbox
+	q := repo.db.WithContext(ctx).
+		Where("author_id IN ?", authorIDs).
+		Order("score DESC, id DESC").
+		Limit(limit)
+	if scoreBefore > 0 {
+		q = q.Where("score < ?", scoreBefore)
+	}
+	if err := q.Find(&outboxes).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(outboxes) == 0 {
+		return nil, 0, nil
+	}
+
+	postIDs := make([]uint, 0, len(outboxes))
+	for _, item := range outboxes {
+		postIDs = append(postIDs, uint(item.PostID))
+	}
+
+	var rawVideos []*video.Video
+	if err := repo.db.WithContext(ctx).Where("id IN ?", postIDs).Find(&rawVideos).Error; err != nil {
+		return nil, 0, err
+	}
+
+	videoMap := make(map[uint]*video.Video, len(rawVideos))
+	for _, v := range rawVideos {
+		videoMap[v.ID] = v
+	}
+
+	// 按 outbox score 顺序重排，保持时间线一致
+	result := make([]*video.Video, 0, len(outboxes))
+	for _, item := range outboxes {
+		if v, ok := videoMap[uint(item.PostID)]; ok {
+			result = append(result, v)
+		}
+	}
+
+	nextScore := outboxes[len(outboxes)-1].Score
+	return result, nextScore, nil
+}
+
 func (repo *FeedRepository) GetByIDs(ctx context.Context, ids []uint) ([]*video.Video, error) {
 	var videos []*video.Video
 	if len(ids) == 0 {
