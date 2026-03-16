@@ -57,3 +57,41 @@ func (c *Client) ZRevRangeByScore(ctx context.Context, key string, max, min stri
 		Count:  count,
 	}).Result()
 }
+
+// ZAddBatchInbox 使用 Pipeline 批量向多个收件箱 ZSET 写入同一条记录
+// 每个 key 执行：ZADD + ZREMRANGEBYRANK（裁剪到 maxLen）+ EXPIRE（刷新 TTL）
+// 所有命令在一次网络往返中发送，比循环调用 ZAdd 效率高得多
+// keys 由调用方构造（如 "follow:inbox:123"），redis 层保持纯粹不感知业务
+func (c *Client) ZAddBatchInbox(ctx context.Context, keys []string, score float64, member string, maxLen int64, ttl time.Duration) error {
+	if c == nil || c.rdb == nil {
+		return nil
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	pipe := c.rdb.Pipeline()
+	for _, key := range keys {
+		pipe.ZAdd(ctx, key, redis.Z{Score: score, Member: member})
+		pipe.ZRemRangeByRank(ctx, key, 0, -(maxLen+1))
+		pipe.Expire(ctx, key, ttl)
+	}
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// ZAdd 向有序集合写入一个成员，score 用 float64 表示时间戳或权重
+func (c *Client) ZAdd(ctx context.Context, key string, score float64, member string) error {
+	if c == nil || c.rdb == nil {
+		return nil
+	}
+	return c.rdb.ZAdd(ctx, key, redis.Z{Score: score, Member: member}).Err()
+}
+
+// ZRemRangeByRank 按排名范围删除成员（排名从 0 开始，负数从末尾倒数）
+// 常用姿势：ZRemRangeByRank(ctx, key, 0, -(maxLen+1)) 保留最新 maxLen 条
+func (c *Client) ZRemRangeByRank(ctx context.Context, key string, start, stop int64) error {
+	if c == nil || c.rdb == nil {
+		return nil
+	}
+	return c.rdb.ZRemRangeByRank(ctx, key, start, stop).Err()
+}

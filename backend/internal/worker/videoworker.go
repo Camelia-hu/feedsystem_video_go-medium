@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
+	"strconv"
+	"time"
+
 	"feedsystem_video_go/internal/middleware/rabbitmq"
+	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/social"
 	"feedsystem_video_go/internal/video"
-	"log"
-	"time"
 
 	"github.com/go-sql-driver/mysql"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -18,11 +22,12 @@ type VideoWorker struct {
 	ch         *amqp.Channel
 	videoRepo  *video.VideoRepository
 	socialRepo *social.SocialRepository
+	cache      *rediscache.Client
 	queue      string
 }
 
-func NewVideoWorker(ch *amqp.Channel, videoRepo *video.VideoRepository, socialRepo *social.SocialRepository, queue string) *VideoWorker {
-	return &VideoWorker{ch: ch, videoRepo: videoRepo, socialRepo: socialRepo, queue: queue}
+func NewVideoWorker(ch *amqp.Channel, videoRepo *video.VideoRepository, socialRepo *social.SocialRepository, cache *rediscache.Client, queue string) *VideoWorker {
+	return &VideoWorker{ch: ch, videoRepo: videoRepo, socialRepo: socialRepo, cache: cache, queue: queue}
 }
 
 func (w *VideoWorker) Run(ctx context.Context) error {
@@ -101,6 +106,15 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 					return nil
 				}
 				return err
+			}
+				// 构造这批粉丝的 inbox key，key 的格式定义在调用方而非 redis 层
+			inboxKeys := make([]string, 0, len(followers))
+			for _, f := range followers {
+				inboxKeys = append(inboxKeys, fmt.Sprintf("follow:inbox:%d", f.ID))
+			}
+			if redisErr := w.cache.ZAddBatchInbox(ctx, inboxKeys, float64(score), strconv.FormatInt(int64(evt.VideoID), 10), 500, 7*24*time.Hour); redisErr != nil {
+				log.Printf("video worker: redis inbox fanout failed: %v", redisErr)
+				// Redis 写失败不影响主流程，DB 已写成功，读时可降级查 DB
 			}
 
 			if len(followers) < batchSize {

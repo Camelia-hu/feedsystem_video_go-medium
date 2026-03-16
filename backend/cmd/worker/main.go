@@ -113,7 +113,7 @@ func main() {
 	commentRepo := video.NewCommentRepository(sqlDB)
 	likeWorker := worker.NewLikeWorker(ch, likeRepo, videoRepo, likeQueue)
 	commentWorker := worker.NewCommentWorker(ch, commentRepo, videoRepo, commentQueue)
-	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, videoQueue)
+	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, cache, videoQueue)
 	var popularityWorker *worker.PopularityWorker
 	if cache != nil {
 		popularityWorker = worker.NewPopularityWorker(ch, cache, popularityQueue)
@@ -122,7 +122,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 4)
+	errCh := make(chan error, 5)
 	log.Printf("Worker started, consuming queue=%s", socialQueue)
 	go func() { errCh <- socialWorker.Run(ctx) }()
 	log.Printf("Worker started, consuming queue=%s", likeQueue)

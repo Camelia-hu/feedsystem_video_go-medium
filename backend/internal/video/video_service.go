@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -50,14 +51,16 @@ func (vs *VideoService) Publish(ctx context.Context, video *Video) error {
 
 	if vs.videoMQ != nil {
 		// 异步保证推模式下数据落入每个关注用户收件箱里面
-		err := vs.videoMQ.PublishInbox(ctx, video.ID, video.AuthorID)
-		if err != nil {
-			return errors.New("failed to publish inboxMQ")
+		// MQ 失败时降级直接写作者发件箱（收件箱 fanout 依赖 Worker，此处仅保证发件箱可用）
+		if err := vs.videoMQ.PublishInbox(ctx, video.ID, video.AuthorID); err != nil {
+			log.Printf("video service: publish inbox mq failed (video=%d): %v", video.ID, err)
 		}
-		// 异步写进自己的发件箱
-		err = vs.videoMQ.PublishOutbox(ctx, video.ID, video.AuthorID)
-		if err != nil {
-			return errors.New("failed to publish outboxMQ")
+		// 异步写进自己的发件箱；MQ 失败则降级直写 DB
+		if err := vs.videoMQ.PublishOutbox(ctx, video.ID, video.AuthorID); err != nil {
+			log.Printf("video service: publish outbox mq failed (video=%d): %v", video.ID, err)
+			if dbErr := vs.repo.InsertFeedOutbox(ctx, int64(video.AuthorID), int64(video.ID), 0); dbErr != nil {
+				log.Printf("video service: fallback insert outbox failed (video=%d): %v", video.ID, dbErr)
+			}
 		}
 	}
 

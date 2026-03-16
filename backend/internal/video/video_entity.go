@@ -18,7 +18,7 @@ type Video struct {
 // FollowFeedInbox 关注收件箱
 type FollowFeedInbox struct {
 	ID        int64     `gorm:"column:id;primaryKey"`
-	UserID    int64     `gorm:"column:user_id;not null;index:idx_user_score"` // 这条feed属于哪个用户
+	UserID    int64     `gorm:"column:user_id;not null;index:idx_user_score;uniqueIndex:uk_user_post"` // 这条feed属于哪个用户
 	PostID    int64     `gorm:"column:post_id;not null;uniqueIndex:uk_user_post"`
 	AuthorID  int64     `gorm:"column:author_id;not null"`
 	Score     int64     `gorm:"column:score;not null;index:idx_user_score,sort:desc"` // 排序值，可直接用时间戳或综合分
