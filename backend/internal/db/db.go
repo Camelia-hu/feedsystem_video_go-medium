@@ -24,7 +24,16 @@ func NewDB(dbcfg config.DatabaseConfig) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(&account.Account{}, &video.Video{}, &video.Like{}, &video.Comment{}, &social.Social{}, &video.FollowFeedInbox{}, &video.FeedOutbox{})
+	return db.AutoMigrate(
+		&account.Account{},
+		&video.Video{},           // 新增 tags 字段
+		&video.Like{},
+		&video.Comment{},
+		&social.Social{},
+		&video.FollowFeedInbox{},
+		&video.FeedOutbox{},
+		&video.VideoAISuggestion{}, // Agentic 发布工作流建议表
+	)
 }
 
 func CloseDB(db *gorm.DB) error {

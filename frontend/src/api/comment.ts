@@ -12,3 +12,7 @@ export function publish(videoId: number, content: string) {
 export function remove(commentId: number) {
   return postJson<MessageResponse>('/comment/delete', { comment_id: commentId }, { authRequired: true })
 }
+
+export function adminRemove(commentId: number) {
+  return postJson<MessageResponse>('/comment/admin/delete', { comment_id: commentId }, { authRequired: true })
+}

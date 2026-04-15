@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/social"
@@ -69,7 +70,19 @@ func (w *VideoWorker) Run(ctx context.Context) error {
 }
 
 func (w *VideoWorker) handleDelivery(ctx context.Context, d amqp.Delivery) {
-	if err := w.process(ctx, d.Body); err != nil {
+	start := time.Now()
+	err := w.process(ctx, d.Body)
+	success := err == nil
+
+	// 记录 MQ 消费指标
+	action := "unknown"
+	var evt rabbitmq.VideoEvent
+	if json.Unmarshal(d.Body, &evt) == nil {
+		action = evt.Action
+	}
+	metrics.RecordMqConsume(w.queue, action, success, time.Since(start))
+
+	if err != nil {
 		log.Printf("video worker: failed to process message: %v", err)
 		// 重新入队，稍后重试
 		_ = d.Nack(false, true)
@@ -105,19 +118,25 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 		}
 		if followerCount >= w.bigVThreshold {
 			log.Printf("video worker: author %d is big V (%d followers), skip inbox fanout", evt.AuthorID, followerCount)
+			// 记录大 V 跳过写扩散
+			metrics.BigVSkipCount.Inc()
 			return nil
 		}
 
 		const batchSize = 500
 		var lastRelationID uint
+		totalFanout := 0
 		for {
 			followers, nextCursor, err := w.socialRepo.GetFollowersBatch(ctx, evt.AuthorID, lastRelationID, batchSize)
 			if err != nil {
+				metrics.InboxFanoutTotal.WithLabelValues("failed").Inc()
 				return err
 			}
 			if len(followers) == 0 {
 				break
 			}
+
+			totalFanout += len(followers)
 
 			err = w.videoRepo.BatchInsertFollowFeedInbox(ctx, followers, int64(evt.VideoID), int64(evt.AuthorID), score)
 			if err != nil {
@@ -144,6 +163,10 @@ func (w *VideoWorker) process(ctx context.Context, body []byte) error {
 			}
 			lastRelationID = nextCursor
 		}
+
+		// 记录写扩散成功指标
+		metrics.InboxFanoutTotal.WithLabelValues("success").Inc()
+		metrics.InboxFanoutSize.Observe(float64(totalFanout))
 		return nil
 
 	case "publish_outbox":

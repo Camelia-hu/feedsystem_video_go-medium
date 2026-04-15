@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"feedsystem_video_go/internal/middleware/metrics"
 )
 
 type VideoMQ struct {
@@ -63,5 +65,8 @@ func (v *VideoMQ) publish(ctx context.Context, action, routingKey string, videoI
 		AuthorID:   authorID,
 		OccurredAt: time.Now().UTC(),
 	}
-	return v.PublishJSON(ctx, videoExchange, routingKey, event)
+	err = v.PublishJSON(ctx, videoExchange, routingKey, event)
+	// 记录 MQ 发布指标
+	metrics.RecordMqPublish(videoQueue, err == nil)
+	return err
 }

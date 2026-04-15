@@ -109,6 +109,18 @@ func (c *Client) ZAddBatchInbox(ctx context.Context, keys []string, score float6
 	return err
 }
 
+// ZRem 从有序集合中删除一个或多个成员
+func (c *Client) ZRem(ctx context.Context, key string, members ...string) error {
+	if c == nil || c.rdb == nil {
+		return nil
+	}
+	args := make([]any, len(members))
+	for i, m := range members {
+		args[i] = m
+	}
+	return c.rdb.ZRem(ctx, key, args...).Err()
+}
+
 // ZAdd 向有序集合写入一个成员，score 用 float64 表示时间戳或权重
 func (c *Client) ZAdd(ctx context.Context, key string, score float64, member string) error {
 	if c == nil || c.rdb == nil {

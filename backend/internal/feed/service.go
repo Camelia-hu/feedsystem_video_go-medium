@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"feedsystem_video_go/internal/middleware/metrics"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/video"
 )
@@ -37,6 +38,9 @@ func NewFeedService(repo *FeedRepository, likeRepo *video.LikeRepository, cache 
 
 // FetchFeeds 统一入口：根据 QType 分派到对应的 FeedLister
 func (f *FeedService) FetchFeeds(ctx context.Context, req *FetchFeedsRequest, viewerID uint) (*FetchFeedsResponse, error) {
+	// 记录 Feed 请求指标
+	metrics.FeedRequestTotal.WithLabelValues(string(req.QType)).Inc()
+
 	lister := f.listerMap[req.QType]
 	if lister == nil {
 		return nil, fmt.Errorf("unsupported query type: %s", req.QType)
@@ -274,25 +278,13 @@ func (f *FeedService) ListByPopularity(ctx context.Context, limit int, reqAsOf i
 			asOf = time.Unix(reqAsOf, 0).UTC().Truncate(time.Minute)
 		}
 
-		const win = 60
-		keys := make([]string, 0, win)
-		for i := 0; i < win; i++ {
-			keys = append(keys, "hot:video:1m:"+asOf.Add(-time.Duration(i)*time.Minute).Format("200601021504"))
-		}
-
-		dest := "hot:video:merge:1m:" + asOf.Format("200601021504")
 		opCtx, cancel := context.WithTimeout(ctx, 80*time.Millisecond)
 		defer cancel()
 
-		exists, _ := f.cache.Exists(opCtx, dest)
-		if !exists {
-			_ = f.cache.ZUnionStore(opCtx, dest, keys, "SUM")
-			_ = f.cache.Expire(opCtx, dest, 2*time.Minute)
-		}
-
+		// 直接读全局衰减分 ZSET，与新统一接口保持一致
 		start := int64(offset)
 		stop := start + int64(limit) - 1
-		members, err := f.cache.ZRevRange(opCtx, dest, start, stop)
+		members, err := f.cache.ZRevRange(opCtx, video.HotDecayKey, start, stop)
 		if err == nil && len(members) == 0 && offset > 0 {
 			return ListByPopularityResponse{
 				VideoList:  []FeedVideoItem{},

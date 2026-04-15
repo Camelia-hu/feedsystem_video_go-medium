@@ -4,6 +4,8 @@ import (
 	"feedsystem_video_go/internal/account"
 	"feedsystem_video_go/internal/feed"
 	"feedsystem_video_go/internal/middleware/jwt"
+	"feedsystem_video_go/internal/middleware/localcache"
+	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/social"
@@ -11,12 +13,27 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 )
 
 func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *gin.Engine {
 	r := gin.Default()
+
+	// Prometheus 指标中间件（全局）
+	r.Use(metrics.HttpMetricsMiddleware())
+
+	// Prometheus metrics 端点
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	r.Static("/static", "./.run/uploads")
+
+	// L1 进程内缓存（视频详情专用，32MB，TTL=1s）
+	videoL1, err := localcache.New(0)
+	if err != nil {
+		log.Printf("localcache init failed (L1 disabled): %v", err)
+		videoL1 = nil
+	}
 	// account
 	accountRepository := account.NewAccountRepository(db)
 	accountService := account.NewAccountService(accountRepository, cache)
@@ -47,8 +64,15 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 		log.Printf("VideoMQ init failed (mq disabled): %v", err)
 		videoMQ = nil
 	}
-	videoService := video.NewVideoService(videoRepository, cache, popularityMQ, videoMQ)
+	orchestrationMQ, err := rabbitmq.NewOrchestrationMQ(rmq)
+	if err != nil {
+		log.Printf("OrchestrationMQ init failed (agent workflow disabled): %v", err)
+		orchestrationMQ = nil
+	}
+	suggestionRepository := video.NewAISuggestionRepository(db)
+	videoService := video.NewVideoService(videoRepository, suggestionRepository, videoL1, cache, popularityMQ, videoMQ, orchestrationMQ)
 	videoHandler := video.NewVideoHandler(videoService, accountService)
+	aiSuggestionHandler := video.NewAISuggestionHandler(videoService)
 	videoGroup := r.Group("/video")
 	{
 		videoGroup.POST("/listByAuthorID", videoHandler.ListByAuthorID)
@@ -60,6 +84,18 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 		protectedVideoGroup.POST("/uploadVideo", videoHandler.UploadVideo)
 		protectedVideoGroup.POST("/uploadCover", videoHandler.UploadCover)
 		protectedVideoGroup.POST("/publish", videoHandler.PublishVideo)
+		protectedVideoGroup.POST("/delete", videoHandler.DeleteVideo)
+		protectedVideoGroup.POST("/updateLikesCount", videoHandler.UpdateLikesCount)
+		// Agentic 发布工作流：Human-in-the-loop 确认/拒绝 AI 建议
+		protectedVideoGroup.GET("/:id/ai-suggestion", aiSuggestionHandler.GetSuggestion)
+		protectedVideoGroup.POST("/:id/ai-suggestion/confirm", aiSuggestionHandler.ConfirmSuggestion)
+		protectedVideoGroup.POST("/:id/ai-suggestion/reject", aiSuggestionHandler.RejectSuggestion)
+	}
+	// 管理员路由
+	adminVideoGroup := videoGroup.Group("")
+	adminVideoGroup.Use(jwt.JWTAuth(accountRepository, cache), jwt.AdminAuth(accountRepository))
+	{
+		adminVideoGroup.POST("/admin/delete", videoHandler.AdminDeleteVideo)
 	}
 	// like
 	likeMQ, err := rabbitmq.NewLikeMQ(rmq)
@@ -97,6 +133,12 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	{
 		protectedCommentGroup.POST("/publish", commentHandler.PublishComment)
 		protectedCommentGroup.POST("/delete", commentHandler.DeleteComment)
+	}
+	// 管理员路由
+	adminCommentGroup := commentGroup.Group("")
+	adminCommentGroup.Use(jwt.JWTAuth(accountRepository, cache), jwt.AdminAuth(accountRepository))
+	{
+		adminCommentGroup.POST("/admin/delete", commentHandler.AdminDeleteComment)
 	}
 	// social
 	socialMQ, err := rabbitmq.NewSocialMQ(rmq)

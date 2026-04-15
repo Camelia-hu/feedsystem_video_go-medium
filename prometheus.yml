@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'feedsystem-backend'
+    static_configs:
+      - targets: ['backend:8080']
+        labels:
+          service: 'api'
+    metrics_path: '/metrics'
+
+  - job_name: 'feedsystem-worker'
+    static_configs:
+      - targets: ['worker:8081']
+        labels:
+          service: 'worker'
+    metrics_path: '/metrics'

@@ -117,6 +117,10 @@ func (w *CommentWorker) applyDelete(ctx context.Context, evt *rabbitmq.CommentEv
 	if c == nil {
 		return nil
 	}
-	return w.comments.DeleteComment(ctx, c)
+	if err := w.comments.DeleteComment(ctx, c); err != nil {
+		return err
+	}
+	// 评论删除后扣减视频热度，与 applyPublish 的 +1 对称
+	return w.videos.ChangePopularity(ctx, c.VideoID, -1)
 }
 

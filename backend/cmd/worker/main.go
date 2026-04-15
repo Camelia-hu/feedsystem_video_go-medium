@@ -9,12 +9,14 @@ import (
 	"feedsystem_video_go/internal/video"
 	"feedsystem_video_go/internal/worker"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -37,7 +39,11 @@ const (
 
 	videoExchange   = "video.box.events"
 	videoQueue      = "video.box.events"
-	videoBindingKey = "video.box.*" // 重命名
+	videoBindingKey = "video.box.*"
+
+	orchestrationExchange   = "content.orchestration.events"
+	orchestrationQueue      = "content.orchestration.events"
+	orchestrationBindingKey = "content.orchestration.*"
 )
 
 func main() {
@@ -102,6 +108,9 @@ func main() {
 			log.Fatalf("Failed to declare popularity topology: %v", err)
 		}
 	}
+	if err := declareOrchestrationTopology(ch); err != nil {
+		log.Fatalf("Failed to declare orchestration topology: %v", err)
+	}
 	if err := ch.Qos(50, 0, false); err != nil {
 		log.Fatalf("Failed to set qos: %v", err)
 	}
@@ -111,9 +120,11 @@ func main() {
 	videoRepo := video.NewVideoRepository(sqlDB)
 	likeRepo := video.NewLikeRepository(sqlDB)
 	commentRepo := video.NewCommentRepository(sqlDB)
+	suggestionRepo := video.NewAISuggestionRepository(sqlDB)
 	likeWorker := worker.NewLikeWorker(ch, likeRepo, videoRepo, likeQueue)
 	commentWorker := worker.NewCommentWorker(ch, commentRepo, videoRepo, commentQueue)
 	videoWorker := worker.NewVideoWorker(ch, videoRepo, socialRepo, cache, videoQueue, 1000)
+	orchestrationWorker := worker.NewOrchestrationWorker(ch, videoRepo, suggestionRepo, cache, orchestrationQueue)
 	var popularityWorker *worker.PopularityWorker
 	if cache != nil {
 		popularityWorker = worker.NewPopularityWorker(ch, cache, popularityQueue)
@@ -122,7 +133,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 5)
+	// 启动 Prometheus metrics HTTP 服务器（独立端口 8081）
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		log.Printf("Worker metrics server listening on :8081")
+		if err := http.ListenAndServe(":8081", mux); err != nil {
+			log.Printf("Worker metrics server error: %v", err)
+		}
+	}()
+
+	errCh := make(chan error, 6)
 	log.Printf("Worker started, consuming queue=%s", socialQueue)
 	go func() { errCh <- socialWorker.Run(ctx) }()
 	log.Printf("Worker started, consuming queue=%s", likeQueue)
@@ -131,6 +152,8 @@ func main() {
 	go func() { errCh <- commentWorker.Run(ctx) }()
 	go func() { errCh <- videoWorker.Run(ctx) }()
 	log.Printf("Worker started, consuming queue=%s", videoQueue)
+	log.Printf("Worker started, consuming queue=%s", orchestrationQueue)
+	go func() { errCh <- orchestrationWorker.Run(ctx) }()
 	if popularityWorker != nil {
 		log.Printf("Worker started, consuming queue=%s", popularityQueue)
 		go func() { errCh <- popularityWorker.Run(ctx) }()
@@ -277,6 +300,40 @@ func declareCommentTopology(ch *amqp.Channel) error {
 		q.Name,
 		commentBindingKey,
 		commentExchange,
+		false,
+		nil,
+	)
+}
+
+func declareOrchestrationTopology(ch *amqp.Channel) error {
+	if err := ch.ExchangeDeclare(
+		orchestrationExchange,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	); err != nil {
+		return err
+	}
+
+	q, err := ch.QueueDeclare(
+		orchestrationQueue,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	return ch.QueueBind(
+		q.Name,
+		orchestrationBindingKey,
+		orchestrationExchange,
 		false,
 		nil,
 	)

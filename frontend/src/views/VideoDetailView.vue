@@ -204,7 +204,8 @@ async function publishComment() {
 
 function canDeleteComment(c: Comment) {
   const myId = auth.claims?.account_id
-  return !!myId && myId === c.author_id
+  const isAdmin = auth.claims?.role === 'admin'
+  return !!myId && (myId === c.author_id || isAdmin)
 }
 
 async function deleteComment(commentId: number) {
@@ -215,7 +216,12 @@ async function deleteComment(commentId: number) {
   drawer.loading = true
   drawer.error = ''
   try {
-    await commentApi.remove(commentId)
+    const isAdmin = auth.claims?.role === 'admin'
+    if (isAdmin) {
+      await commentApi.adminRemove(commentId)
+    } else {
+      await commentApi.remove(commentId)
+    }
     await loadComments()
     toast.info('评论已删除')
   } catch (e) {
@@ -223,6 +229,36 @@ async function deleteComment(commentId: number) {
     toast.error(drawer.error)
   } finally {
     drawer.loading = false
+  }
+}
+
+function canDeleteVideo() {
+  const myId = auth.claims?.account_id
+  const isAdmin = auth.claims?.role === 'admin'
+  return !!myId && state.video && (myId === state.video.author_id || isAdmin)
+}
+
+async function deleteVideo() {
+  if (!state.video) return
+  if (!auth.isLoggedIn) return needLogin()
+  if (!window.confirm('确认删除这个视频？删除后无法恢复！')) return
+
+  state.busy = true
+  try {
+    const isAdmin = auth.claims?.role === 'admin'
+    const myId = auth.claims?.account_id
+    if (isAdmin && myId !== state.video.author_id) {
+      await videoApi.adminRemove(state.video.id)
+    } else {
+      await videoApi.remove(state.video.id)
+    }
+    toast.success('视频已删除')
+    await router.push('/')
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : String(e)
+    toast.error(msg)
+  } finally {
+    state.busy = false
   }
 }
 
@@ -319,11 +355,23 @@ onMounted(async () => {
               <span class="icon">↗</span>
               <span class="count">分享</span>
             </button>
+
+            <button v-if="canDeleteVideo()" class="act delete" type="button" :disabled="state.busy" @click.stop="deleteVideo">
+              <span class="icon">🗑</span>
+              <span class="count">删除</span>
+            </button>
           </div>
 
           <div class="hint">
             <span class="chip mono">点击 暂停/播放</span>
             <span class="chip mono">双击 点赞</span>
+            <!-- 临时调试信息 -->
+            <span v-if="auth.isLoggedIn" class="chip mono" style="background: rgba(0, 255, 0, 0.2)">
+              登录: {{ auth.claims?.username }} | Role: {{ auth.claims?.role || 'user' }} | ID: {{ auth.claims?.account_id }}
+            </span>
+            <span v-if="canDeleteVideo()" class="chip mono" style="background: rgba(255, 0, 0, 0.3)">
+              ✓ 有删除权限
+            </span>
           </div>
         </div>
       </div>
@@ -497,6 +545,16 @@ onMounted(async () => {
 .act:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.act.delete {
+  border-color: rgba(254, 44, 85, 0.45);
+  background: rgba(254, 44, 85, 0.18);
+}
+
+.act.delete:hover {
+  background: rgba(254, 44, 85, 0.28);
+  border-color: rgba(254, 44, 85, 0.65);
 }
 
 .icon {

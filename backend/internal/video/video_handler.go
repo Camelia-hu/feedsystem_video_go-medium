@@ -226,3 +226,17 @@ func (vh *VideoHandler) UpdateLikesCount(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"message": "likes count updated"})
 }
+
+// AdminDeleteVideo 管理员删除视频（不检查作者权限）
+func (vh *VideoHandler) AdminDeleteVideo(c *gin.Context) {
+	var req DeleteVideoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := vh.service.AdminDelete(c.Request.Context(), req.ID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"message": "video deleted by admin"})
+}

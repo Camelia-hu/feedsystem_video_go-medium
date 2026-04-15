@@ -7,6 +7,7 @@ type Video struct {
 	AuthorID    uint      `gorm:"index;not null" json:"author_id"`
 	Username    string    `gorm:"type:varchar(255);not null" json:"username"`
 	Title       string    `gorm:"type:varchar(255);not null" json:"title"`
+	Tags        string    `gorm:"type:varchar(500);default:''" json:"tags,omitempty"` // 逗号分隔的标签，由 AI 建议确认后写入
 	Description string    `gorm:"type:varchar(255);" json:"description,omitempty"`
 	PlayURL     string    `gorm:"type:varchar(255);not null" json:"play_url"`
 	CoverURL    string    `gorm:"type:varchar(255);not null" json:"cover_url"`

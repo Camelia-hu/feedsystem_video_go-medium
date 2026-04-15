@@ -197,3 +197,17 @@ func (vr *VideoRepository) InsertFeedOutbox(ctx context.Context, authorID int64,
 
 	return vr.db.WithContext(ctx).Create(&item).Error
 }
+
+// UpdateVideoMeta 创作者确认 AI 建议后，将优化后的标题和标签写回视频记录
+func (vr *VideoRepository) UpdateVideoMeta(ctx context.Context, id uint, title, tags string) error {
+	if id == 0 {
+		return errors.New("video id is required")
+	}
+	return vr.db.WithContext(ctx).
+		Model(&Video{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"title": title,
+			"tags":  tags,
+		}).Error
+}

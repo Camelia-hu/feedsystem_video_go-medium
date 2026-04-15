@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"feedsystem_video_go/internal/middleware/metrics"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/video"
 )
@@ -260,31 +261,18 @@ func (l *popularityLister) FetchVideoList(ctx context.Context, _ uint, limit int
 	b := bucket[OrderByPopularity]
 
 	if l.cache != nil {
-		asOf := time.Now().UTC().Truncate(time.Minute)
-		if b.AsOf > 0 {
-			asOf = time.Unix(b.AsOf, 0).UTC().Truncate(time.Minute)
-		}
-
-		const win = 60
-		keys := make([]string, 0, win)
-		for i := 0; i < win; i++ {
-			keys = append(keys, "hot:video:1m:"+asOf.Add(-time.Duration(i)*time.Minute).Format("200601021504"))
-		}
-
-		dest := "hot:video:merge:1m:" + asOf.Format("200601021504")
+		// 热榜使用单一衰减分 ZSET（hot:video:decay），score 已在写入时预乘时间权重
+		// ZRevRange 排名直接等价于指数衰减后的热度排名，无需合并多个 window key
 		opCtx, cancel := context.WithTimeout(ctx, 80*time.Millisecond)
 		defer cancel()
 
-		exists, _ := l.cache.Exists(opCtx, dest)
-		if !exists {
-			_ = l.cache.ZUnionStore(opCtx, dest, keys, "SUM")
-			_ = l.cache.Expire(opCtx, dest, 2*time.Minute)
-		}
-
 		start := int64(b.Offset)
 		stop := start + int64(limit) - 1
-		members, err := l.cache.ZRevRange(opCtx, dest, start, stop)
+		members, err := l.cache.ZRevRange(opCtx, video.HotDecayKey, start, stop)
 		if err == nil && len(members) > 0 {
+			// 记录热榜缓存命中
+			metrics.HotRankCacheHit.Inc()
+
 			ids := make([]uint, 0, len(members))
 			for _, m := range members {
 				u, parseErr := strconv.ParseUint(m, 10, 64)
@@ -294,7 +282,6 @@ func (l *popularityLister) FetchVideoList(ctx context.Context, _ uint, limit int
 			}
 			videos, dbErr := l.repo.GetByIDs(ctx, ids)
 			if dbErr == nil {
-				b.AsOf = asOf.Unix()
 				b.Offset += len(videos)
 				return reorderByIDs(videos, ids), nil
 			}
@@ -304,6 +291,9 @@ func (l *popularityLister) FetchVideoList(ctx context.Context, _ uint, limit int
 		if err == nil && len(members) == 0 && b.Offset > 0 {
 			return []*video.Video{}, nil
 		}
+
+		// 记录热榜缓存未命中（降级 DB）
+		metrics.HotRankCacheMiss.Inc()
 	}
 
 	// DB fallback
