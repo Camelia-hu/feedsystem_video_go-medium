@@ -1,0 +1,25 @@
+# post-service 独立镜像（多阶段构建，非 root）
+#
+# Build:
+#   docker build -f backend/Dockerfile.postservice -t feedsystem/post-service:latest .
+#
+ARG GO_VERSION=1.24.5
+
+FROM golang:${GO_VERSION} AS build
+WORKDIR /src/backend
+ENV GOPROXY=https://goproxy.cn,direct
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags="-s -w" -o /out/postservice ./cmd/postservice
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -s /sbin/nologin app
+WORKDIR /app
+COPY --from=build /src/backend/configs ./configs
+RUN mkdir -p /app/.run/uploads && chown -R app:app /app
+USER app
+COPY --from=build /out/postservice /app/postservice
+EXPOSE 8080
+ENTRYPOINT ["/app/postservice"]
