@@ -1,0 +1,24 @@
+# seed 数据填充工具镜像（一次性 Job 用）
+#
+# Build:
+#   docker build -f backend/Dockerfile.seed -t feedsystem/seed:latest .
+#
+ARG GO_VERSION=1.24.5
+
+FROM golang:${GO_VERSION} AS build
+WORKDIR /src/backend
+ENV GOPROXY=https://goproxy.cn,direct
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -s /sbin/nologin app
+WORKDIR /app
+COPY --from=build /src/backend/configs ./configs
+RUN chown -R app:app /app
+USER app
+COPY --from=build /out/seed /app/seed
+ENTRYPOINT ["/app/seed"]
