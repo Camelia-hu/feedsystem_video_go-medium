@@ -19,6 +19,7 @@ COPY backend/ ./
 ENV CGO_ENABLED=0
 RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd
 RUN go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
+RUN go build -trimpath -ldflags="-s -w" -o /out/paygateway ./cmd/paygateway
 
 FROM alpine:3.21 AS base
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -s /sbin/nologin app
@@ -35,4 +36,10 @@ ENTRYPOINT ["/app/api"]
 FROM base AS worker
 COPY --from=build /out/worker /app/worker
 ENTRYPOINT ["/app/worker"]
+
+FROM base AS paygateway
+COPY --from=build /out/paygateway /app/paygateway
+EXPOSE 8090
+ENV PAY_GATEWAY_PORT=8090
+ENTRYPOINT ["/app/paygateway"]
 

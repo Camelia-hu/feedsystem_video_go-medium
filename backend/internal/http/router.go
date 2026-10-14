@@ -8,6 +8,7 @@ import (
 	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
+	"feedsystem_video_go/internal/pay"
 	"feedsystem_video_go/internal/social"
 	"feedsystem_video_go/internal/video"
 	"log"
@@ -177,5 +178,10 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	{
 		protectedFeedGroup.POST("/listByFollowing", feedHandler.ListByFollowing)
 	}
+	var popPublisher pay.PopularityPublisher
+	if popularityMQ != nil {
+		popPublisher = popularityMQ
+	}
+	MountPay(r, db, accountRepository, cache, popPublisher)
 	return r
 }

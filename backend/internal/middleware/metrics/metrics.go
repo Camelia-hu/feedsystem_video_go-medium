@@ -112,6 +112,22 @@ var (
 		},
 	)
 
+	PayOrderTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pay_order_total",
+			Help: "支付订单事件总数",
+		},
+		[]string{"channel", "status"},
+	)
+
+	PayCallbackTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pay_callback_total",
+			Help: "支付回调处理总数",
+		},
+		[]string{"channel", "result"},
+	)
+
 	LikeActionTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "like_action_total",

@@ -64,6 +64,12 @@ services:
     volumes:
       - ./backend/configs/config.docker.yaml:/app/configs/config.yaml:ro
       - backend_uploads:/app/.run/uploads
+    environment:
+      PAY_GATEWAY_URL: http://localhost:8090
+      PAY_GATEWAY_INTERNAL_URL: http://paygateway:8090
+      PAY_NOTIFY_BASE: http://backend:8080
+      PAY_RETURN_BASE: http://localhost:5173
+      PAY_CALLBACK_SECRET: dev-pay-secret
     depends_on:
       mysql:
         condition: service_healthy
@@ -71,6 +77,20 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
+  paygateway:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: paygateway
+    restart: always
+    ports:
+      - "8090:8090"
+    environment:
+      PAY_GATEWAY_PORT: "8090"
+      PAY_CALLBACK_SECRET: dev-pay-secret
+    depends_on:
+      - backend
 
   worker:
     build:
