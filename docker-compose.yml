@@ -65,10 +65,11 @@ services:
       - ./backend/configs/config.docker.yaml:/app/configs/config.yaml:ro
       - backend_uploads:/app/.run/uploads
     environment:
-      PAY_GATEWAY_URL: http://localhost:8090
+      # 浏览器要访问的地址：本地开发默认 localhost，部署到服务器时用 .env 覆盖成公网地址
+      PAY_GATEWAY_URL: ${PAY_GATEWAY_URL:-http://localhost:8090}
       PAY_GATEWAY_INTERNAL_URL: http://paygateway:8090
       PAY_NOTIFY_BASE: http://backend:8080
-      PAY_RETURN_BASE: http://localhost:5173
+      PAY_RETURN_BASE: ${PAY_RETURN_BASE:-http://localhost:5173}
       PAY_CALLBACK_SECRET: dev-pay-secret
     depends_on:
       mysql:
@@ -86,11 +87,15 @@ services:
     restart: always
     ports:
       - "8090:8090"
+    volumes:
+      # 与 backend 一样挂载容器内配置，否则会读到镜像里 localhost:3307 连不上 MySQL
+      - ./backend/configs/config.docker.yaml:/app/configs/config.yaml:ro
     environment:
       PAY_GATEWAY_PORT: "8090"
       PAY_CALLBACK_SECRET: dev-pay-secret
     depends_on:
-      - backend
+      mysql:
+        condition: service_healthy
 
   worker:
     build:
