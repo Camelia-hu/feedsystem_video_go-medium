@@ -18,9 +18,8 @@ on:
   workflow_dispatch:
 
 env:
-  # ↓↓↓ 改成你的镜像仓库（控制台「登录」提示里显示的域名）↓↓↓
   REGISTRY: ccr.ccs.tencentyun.com
-  NAMESPACE: your-namespace
+  NAMESPACE: beihaicameliahu159266
 
 jobs:
   backend:
