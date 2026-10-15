@@ -54,6 +54,7 @@ services:
       retries: 20
 
   backend:
+    image: ${IMAGE_BACKEND:-feedsystem-backend:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -80,6 +81,7 @@ services:
         condition: service_healthy
 
   paygateway:
+    image: ${IMAGE_PAYGATEWAY:-feedsystem-paygateway:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -98,6 +100,7 @@ services:
         condition: service_healthy
 
   worker:
+    image: ${IMAGE_WORKER:-feedsystem-worker:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -142,6 +145,7 @@ services:
       - grafana_data:/var/lib/grafana
 
   frontend:
+    image: ${IMAGE_FRONTEND:-feedsystem-frontend:local}
     build:
       context: .
       dockerfile: frontend/Dockerfile
