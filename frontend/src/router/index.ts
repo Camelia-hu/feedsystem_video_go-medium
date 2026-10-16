@@ -9,6 +9,8 @@ import ChangePasswordView from '../views/ChangePasswordView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import UserProfileView from '../views/UserProfileView.vue'
+import WalletView from '../views/WalletView.vue'
+import PayResultView from '../views/PayResultView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -22,6 +24,9 @@ const router = createRouter({
     { path: '/account/register', name: 'account-register', component: RegisterView },
     { path: '/account/change-password', name: 'account-change-password', component: ChangePasswordView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/wallet', name: 'wallet', component: WalletView },
+    { path: '/pay/checkout', redirect: '/wallet' },
+    { path: '/pay/result', name: 'pay-result', component: PayResultView },
     { path: '/u/:id', name: 'user-profile', component: UserProfileView, props: true },
   ],
 })

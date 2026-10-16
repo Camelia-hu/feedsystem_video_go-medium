@@ -1,0 +1,30 @@
+# 集群内 k6 压测 Job：直接打 feed-api Service，绕开 port-forward 瓶颈
+# 用法：先创建 configmap k6-script（来自 k6/bench-feed.js），再 apply 本 Job。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-bench
+  namespace: feedsystem
+spec:
+  template:
+    metadata:
+      labels:
+        app: k6-bench
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "run"
+            - "-e"
+            - "BASE_URL=http://feed-api:8080"
+            - "/scripts/bench-feed.js"
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: k6-script

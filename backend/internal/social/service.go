@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"feedsystem_video_go/internal/account"
+	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 )
 
@@ -39,6 +40,8 @@ func (s *SocialService) Follow(ctx context.Context, social *Social) error {
 	if s.socialMQ != nil {
 		s.socialMQ.Follow(ctx, social.FollowerID, social.VloggerID)
 	}
+	// 记录关注指标
+	metrics.FollowActionTotal.WithLabelValues("follow").Inc()
 	return s.repo.Follow(ctx, social)
 }
 
@@ -61,6 +64,8 @@ func (s *SocialService) Unfollow(ctx context.Context, social *Social) error {
 	if s.socialMQ != nil {
 		s.socialMQ.UnFollow(ctx, social.FollowerID, social.VloggerID)
 	}
+	// 记录取消关注指标
+	metrics.FollowActionTotal.WithLabelValues("unfollow").Inc()
 	return s.repo.Unfollow(ctx, social)
 }
 

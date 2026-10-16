@@ -1,0 +1,94 @@
+2026/03/24 16:50:23 Loading config from configs/config.yaml
+2026/03/24 16:50:26 Redis connected (cache enabled)
+2026/03/24 16:50:26 RabbitMQ connected
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /metrics                  --> feedsystem_video_go/internal/http.SetRouter.WrapH.func2 (4 handlers)
+[GIN-debug] GET    /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (4 handlers)
+[GIN-debug] HEAD   /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (4 handlers)
+[GIN-debug] POST   /account/register         --> feedsystem_video_go/internal/account.(*AccountHandler).CreateAccount-fm (4 handlers)
+[GIN-debug] POST   /account/login            --> feedsystem_video_go/internal/account.(*AccountHandler).Login-fm (4 handlers)
+[GIN-debug] POST   /account/changePassword   --> feedsystem_video_go/internal/account.(*AccountHandler).ChangePassword-fm (4 handlers)
+[GIN-debug] POST   /account/findByID         --> feedsystem_video_go/internal/account.(*AccountHandler).FindByID-fm (4 handlers)
+[GIN-debug] POST   /account/findByUsername   --> feedsystem_video_go/internal/account.(*AccountHandler).FindByUsername-fm (4 handlers)
+[GIN-debug] POST   /account/logout           --> feedsystem_video_go/internal/account.(*AccountHandler).Logout-fm (5 handlers)
+[GIN-debug] POST   /account/rename           --> feedsystem_video_go/internal/account.(*AccountHandler).Rename-fm (5 handlers)
+[GIN-debug] POST   /video/listByAuthorID     --> feedsystem_video_go/internal/video.(*VideoHandler).ListByAuthorID-fm (4 handlers)
+[GIN-debug] POST   /video/getDetail          --> feedsystem_video_go/internal/video.(*VideoHandler).GetDetail-fm (4 handlers)
+[GIN-debug] POST   /video/uploadVideo        --> feedsystem_video_go/internal/video.(*VideoHandler).UploadVideo-fm (5 handlers)
+[GIN-debug] POST   /video/uploadCover        --> feedsystem_video_go/internal/video.(*VideoHandler).UploadCover-fm (5 handlers)
+[GIN-debug] POST   /video/publish            --> feedsystem_video_go/internal/video.(*VideoHandler).PublishVideo-fm (5 handlers)
+[GIN-debug] POST   /video/delete             --> feedsystem_video_go/internal/video.(*VideoHandler).DeleteVideo-fm (5 handlers)
+[GIN-debug] POST   /video/updateLikesCount   --> feedsystem_video_go/internal/video.(*VideoHandler).UpdateLikesCount-fm (5 handlers)
+[GIN-debug] POST   /like/like                --> feedsystem_video_go/internal/video.(*LikeHandler).Like-fm (5 handlers)
+[GIN-debug] POST   /like/unlike              --> feedsystem_video_go/internal/video.(*LikeHandler).Unlike-fm (5 handlers)
+[GIN-debug] POST   /like/isLiked             --> feedsystem_video_go/internal/video.(*LikeHandler).IsLiked-fm (5 handlers)
+[GIN-debug] POST   /like/listMyLikedVideos   --> feedsystem_video_go/internal/video.(*LikeHandler).ListMyLikedVideos-fm (5 handlers)
+[GIN-debug] POST   /comment/listAll          --> feedsystem_video_go/internal/video.(*CommentHandler).GetAllComments-fm (4 handlers)
+[GIN-debug] POST   /comment/publish          --> feedsystem_video_go/internal/video.(*CommentHandler).PublishComment-fm (5 handlers)
+[GIN-debug] POST   /comment/delete           --> feedsystem_video_go/internal/video.(*CommentHandler).DeleteComment-fm (5 handlers)
+[GIN-debug] POST   /social/follow            --> feedsystem_video_go/internal/social.(*SocialHandler).Follow-fm (5 handlers)
+[GIN-debug] POST   /social/unfollow          --> feedsystem_video_go/internal/social.(*SocialHandler).Unfollow-fm (5 handlers)
+[GIN-debug] POST   /social/getAllFollowers   --> feedsystem_video_go/internal/social.(*SocialHandler).GetAllFollowers-fm (5 handlers)
+[GIN-debug] POST   /social/getAllVloggers    --> feedsystem_video_go/internal/social.(*SocialHandler).GetAllVloggers-fm (5 handlers)
+[GIN-debug] POST   /feed/list                --> feedsystem_video_go/internal/feed.(*FeedHandler).FetchFeeds-fm (5 handlers)
+[GIN-debug] POST   /feed/listLatest          --> feedsystem_video_go/internal/feed.(*FeedHandler).ListLatest-fm (5 handlers)
+[GIN-debug] POST   /feed/listLikesCount      --> feedsystem_video_go/internal/feed.(*FeedHandler).ListLikesCount-fm (5 handlers)
+[GIN-debug] POST   /feed/listByPopularity    --> feedsystem_video_go/internal/feed.(*FeedHandler).ListByPopularity-fm (5 handlers)
+[GIN-debug] POST   /feed/listByFollowing     --> feedsystem_video_go/internal/feed.(*FeedHandler).ListByFollowing-fm (6 handlers)
+2026/03/24 16:50:26 Server is running on port 8080
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :8080
+[GIN] 2026/03/24 - 16:50:37 | 200 |      5.4945ms |             ::1 | GET      "/metrics"
+[GIN] 2026/03/24 - 16:51:21 | 200 |       505.4µs |             ::1 | GET      "/metrics"
+[GIN] 2026/03/24 - 16:52:47 | 200 |            0s |             ::1 | GET      "/metrics"
+[GIN] 2026/03/24 - 16:53:45 | 200 |     40.6629ms |       127.0.0.1 | POST     "/feed/listByPopularity"
+[GIN] 2026/03/24 - 16:53:45 | 404 |      1.0535ms |       127.0.0.1 | GET      "/static/covers/1/20260301/4915375c915a6adc.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |      1.7615ms |       127.0.0.1 | GET      "/static/covers/1/20260318/6902b6fc386093d5.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |      1.7615ms |       127.0.0.1 | GET      "/static/covers/1/20260222/3d730065c4519bd0.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |       533.8µs |       127.0.0.1 | GET      "/static/covers/1/20260307/4ba9f17a045b86df.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |      1.0535ms |       127.0.0.1 | GET      "/static/covers/1/20260220/b60a54a1e0f8e4e2.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |      1.0535ms |       127.0.0.1 | GET      "/static/covers/1/20260309/94fa187474e821cf.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260218/89ddbf91680f5a9a.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260307/b090790ff03b91ff.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |       768.1µs |       127.0.0.1 | GET      "/static/covers/1/20260317/ac87a98ad4a780c2.jpg"
+[GIN] 2026/03/24 - 16:53:45 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260226/c1f03cc1be97c331.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 200 |      8.6973ms |       127.0.0.1 | POST     "/feed/listByPopularity"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260222/3d730065c4519bd0.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       506.3µs |       127.0.0.1 | GET      "/static/covers/1/20260318/6902b6fc386093d5.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260301/4915375c915a6adc.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       411.3µs |       127.0.0.1 | GET      "/static/covers/1/20260309/94fa187474e821cf.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260220/b60a54a1e0f8e4e2.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260307/4ba9f17a045b86df.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       508.8µs |       127.0.0.1 | GET      "/static/covers/1/20260218/89ddbf91680f5a9a.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260307/b090790ff03b91ff.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260317/ac87a98ad4a780c2.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260226/c1f03cc1be97c331.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 200 |      16.597ms |       127.0.0.1 | POST     "/feed/listLatest"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260319/f990682f4a3f67e0.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       553.6µs |       127.0.0.1 | GET      "/static/covers/1/20260319/22fa1ee312ef5db0.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260319/85685dde170fc11b.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       560.2µs |       127.0.0.1 | GET      "/static/covers/1/20260319/853987086a266415.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260319/077c07a0399c0bb0.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       550.3µs |       127.0.0.1 | GET      "/static/covers/1/20260319/104f94f6b619544c.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       661.6µs |       127.0.0.1 | GET      "/static/covers/1/20260319/c803628701b38c3b.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260319/608977eeab447f07.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       394.1µs |       127.0.0.1 | GET      "/static/covers/1/20260319/fb0bff2895fdd0e1.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/covers/1/20260319/ca804150d90c2742.jpg"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/videos/1/20260319/536554c320bf2bfe.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       343.2µs |       127.0.0.1 | GET      "/static/videos/1/20260319/2a3721ad923f4030.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       343.2µs |       127.0.0.1 | GET      "/static/videos/1/20260319/99b929c458d0a2a7.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/videos/1/20260319/c45872e0e5d13c23.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       938.4µs |       127.0.0.1 | GET      "/static/videos/1/20260319/0c8caf5ee41aab02.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/videos/1/20260319/a5ae199a6870e181.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/videos/1/20260319/6a23b852dd7bb108.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       966.5µs |       127.0.0.1 | GET      "/static/videos/1/20260319/f22cdba74be414ab.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |            0s |       127.0.0.1 | GET      "/static/videos/1/20260319/5be5c63214aa573c.mp4"
+[GIN] 2026/03/24 - 16:53:47 | 404 |       702.4µs |       127.0.0.1 | GET      "/static/videos/1/20260319/dc6a8c442bc7a710.mp4"
+[GIN] 2026/03/24 - 16:57:39 | 200 |            0s |             ::1 | GET      "/metrics"
+exit status 0x40010004

@@ -5,6 +5,7 @@ type Account struct {
 	Username string `gorm:"unique" json:"username"`
 	Password string `json:"-"`
 	Token    string `json:"-"`
+	Role     string `gorm:"default:'user'" json:"role"` // admin 或 user，默认为 user
 }
 
 type CreateAccountRequest struct {

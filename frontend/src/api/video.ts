@@ -1,5 +1,5 @@
 import { postForm, postJson } from './client'
-import type { Video } from './types'
+import type { MessageResponse, Video } from './types'
 
 export function publishVideo(input: { title: string; description: string; play_url: string; cover_url: string }) {
   return postJson<Video>('/video/publish', input, { authRequired: true })
@@ -19,10 +19,18 @@ export function uploadCover(file: File) {
   return postForm<UploadResponse>('/video/uploadCover', fd, { authRequired: true })
 }
 
-export function listByAuthorId(authorId: number) {
-  return postJson<Video[]>('/video/listByAuthorID', { author_id: authorId })
+export function listByAuthorId(authorId: number, offset?: number) {
+  return postJson<Video[]>('/video/listByAuthorID', { author_id: authorId, offset: offset ?? 0 })
 }
 
 export function getDetail(id: number) {
   return postJson<Video>('/video/getDetail', { id })
+}
+
+export function remove(id: number) {
+  return postJson<MessageResponse>('/video/delete', { id }, { authRequired: true })
+}
+
+export function adminRemove(id: number) {
+  return postJson<MessageResponse>('/video/admin/delete', { id }, { authRequired: true })
 }

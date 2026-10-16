@@ -1,0 +1,18 @@
+# 非敏感连接配置，供各服务通过 envFrom 引用；密码类走 feedsystem-secrets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feedsystem-config
+  namespace: feedsystem
+data:
+  SERVER_PORT: "8080"
+  DB_HOST: "mysql"
+  DB_PORT: "3306"
+  DB_USER: "root"
+  DB_NAME: "feedsystem"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: "admin"

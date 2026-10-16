@@ -1,6 +1,7 @@
 export type JwtPayload = {
   account_id?: number
   username?: string
+  role?: string // admin 或 user
   exp?: number
   iat?: number
   nbf?: number

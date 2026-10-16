@@ -124,3 +124,29 @@ func GetAccountID(c *gin.Context) (uint, error) {
 
 	return accountID, nil
 }
+
+// AdminAuth 管理员权限中间件，必须在 JWTAuth 之后使用
+func AdminAuth(accountRepo *account.AccountRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		accountID, err := GetAccountID(c)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		// 查询用户角色
+		accountInfo, err := accountRepo.FindByID(c.Request.Context(), accountID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to get account info"})
+			return
+		}
+
+		if accountInfo.Role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin permission required"})
+			return
+		}
+
+		c.Set("role", accountInfo.Role)
+		c.Next()
+	}
+}

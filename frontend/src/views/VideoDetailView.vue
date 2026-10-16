@@ -8,6 +8,8 @@ import { ApiError } from '../api/client'
 import * as commentApi from '../api/comment'
 import * as likeApi from '../api/like'
 import type { Comment, Video } from '../api/types'
+import * as payApi from '../api/pay'
+import { newIdempotencyKey } from '../api/pay'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
@@ -31,6 +33,11 @@ const state = reactive({
 
 const muted = ref(true)
 const videoEl = ref<HTMLVideoElement | null>(null)
+
+const gifts = ref<payApi.Gift[]>([])
+const giftCount = ref(0)
+const giftOpen = ref(false)
+const giftBusy = ref('')
 
 const drawer = reactive({
   open: false,
@@ -71,6 +78,39 @@ async function loadIsLiked() {
     state.isLiked = res.is_liked
   } catch {
     state.isLiked = null
+  }
+}
+
+async function loadGifts() {
+  try {
+    const [catalog, stat] = await Promise.all([payApi.giftCatalog(), payApi.giftStat(id.value)])
+    gifts.value = catalog.gifts ?? []
+    giftCount.value = stat.stat?.gift_count ?? 0
+  } catch {
+    gifts.value = []
+  }
+}
+
+async function sendGift(code: string) {
+  if (!auth.isLoggedIn) {
+    await needLogin()
+    return
+  }
+  giftBusy.value = code
+  try {
+    const res = await payApi.sendGift({
+      video_id: id.value,
+      gift_code: code,
+      count: 1,
+      idempotency_key: newIdempotencyKey(),
+    })
+    giftCount.value += 1
+    toast.success(`送出礼物，作者获得 ${res.gift.diamond_credit} 钻石`)
+    giftOpen.value = false
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : String(e))
+  } finally {
+    giftBusy.value = ''
   }
 }
 
@@ -204,7 +244,8 @@ async function publishComment() {
 
 function canDeleteComment(c: Comment) {
   const myId = auth.claims?.account_id
-  return !!myId && myId === c.author_id
+  const isAdmin = auth.claims?.role === 'admin'
+  return !!myId && (myId === c.author_id || isAdmin)
 }
 
 async function deleteComment(commentId: number) {
@@ -215,7 +256,12 @@ async function deleteComment(commentId: number) {
   drawer.loading = true
   drawer.error = ''
   try {
-    await commentApi.remove(commentId)
+    const isAdmin = auth.claims?.role === 'admin'
+    if (isAdmin) {
+      await commentApi.adminRemove(commentId)
+    } else {
+      await commentApi.remove(commentId)
+    }
     await loadComments()
     toast.info('评论已删除')
   } catch (e) {
@@ -223,6 +269,36 @@ async function deleteComment(commentId: number) {
     toast.error(drawer.error)
   } finally {
     drawer.loading = false
+  }
+}
+
+function canDeleteVideo() {
+  const myId = auth.claims?.account_id
+  const isAdmin = auth.claims?.role === 'admin'
+  return !!myId && state.video && (myId === state.video.author_id || isAdmin)
+}
+
+async function deleteVideo() {
+  if (!state.video) return
+  if (!auth.isLoggedIn) return needLogin()
+  if (!window.confirm('确认删除这个视频？删除后无法恢复！')) return
+
+  state.busy = true
+  try {
+    const isAdmin = auth.claims?.role === 'admin'
+    const myId = auth.claims?.account_id
+    if (isAdmin && myId !== state.video.author_id) {
+      await videoApi.adminRemove(state.video.id)
+    } else {
+      await videoApi.remove(state.video.id)
+    }
+    toast.success('视频已删除')
+    await router.push('/')
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : String(e)
+    toast.error(msg)
+  } finally {
+    state.busy = false
   }
 }
 
@@ -246,6 +322,7 @@ watch(
 
 onMounted(async () => {
   await loadVideo()
+  await loadGifts()
   await loadIsLiked()
   await nextTick()
   await play()
@@ -299,6 +376,11 @@ onMounted(async () => {
               <span class="count">{{ state.video.likes_count }}</span>
             </button>
 
+            <button class="act" type="button" @click.stop="giftOpen = true; loadGifts()">
+              <span class="icon">🎁</span>
+              <span class="count">{{ giftCount }}</span>
+            </button>
+
             <button class="act" type="button" @click.stop="openComments">
               <span class="icon">💬</span>
               <span class="count">评论</span>
@@ -319,11 +401,40 @@ onMounted(async () => {
               <span class="icon">↗</span>
               <span class="count">分享</span>
             </button>
+
+            <button v-if="canDeleteVideo()" class="act delete" type="button" :disabled="state.busy" @click.stop="deleteVideo">
+              <span class="icon">🗑</span>
+              <span class="count">删除</span>
+            </button>
           </div>
 
           <div class="hint">
             <span class="chip mono">点击 暂停/播放</span>
             <span class="chip mono">双击 点赞</span>
+            <!-- 临时调试信息 -->
+            <span v-if="auth.isLoggedIn" class="chip mono" style="background: rgba(0, 255, 0, 0.2)">
+              登录: {{ auth.claims?.username }} | Role: {{ auth.claims?.role || 'user' }} | ID: {{ auth.claims?.account_id }}
+            </span>
+            <span v-if="canDeleteVideo()" class="chip mono" style="background: rgba(255, 0, 0, 0.3)">
+              ✓ 有删除权限
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="giftOpen" class="drawer-backdrop" @click.self="giftOpen = false">
+        <div class="drawer">
+          <div class="drawer-head">
+            <div class="drawer-title">送礼物</div>
+            <button class="drawer-x" type="button" @click="giftOpen = false">×</button>
+          </div>
+          <div class="drawer-body">
+            <button v-for="gift in gifts" :key="gift.code" class="comment" type="button" :disabled="giftBusy === gift.code" @click="sendGift(gift.code)">
+              <div class="comment-top">
+                <div class="comment-user">{{ gift.name }}</div>
+                <div class="comment-meta">{{ gift.coin_price }} 金币</div>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -497,6 +608,16 @@ onMounted(async () => {
 .act:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.act.delete {
+  border-color: rgba(254, 44, 85, 0.45);
+  background: rgba(254, 44, 85, 0.18);
+}
+
+.act.delete:hover {
+  background: rgba(254, 44, 85, 0.28);
+  border-color: rgba(254, 44, 85, 0.65);
 }
 
 .icon {

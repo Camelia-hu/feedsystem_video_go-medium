@@ -1,5 +1,16 @@
 import { postJson } from './client'
-import type { ListByFollowingResponse, ListByPopularityResponse, ListLatestResponse, ListLikesCountResponse } from './types'
+import type {
+  FetchFeedsRequest,
+  FetchFeedsResponse,
+  ListByFollowingResponse,
+  ListByPopularityResponse,
+  ListLatestResponse,
+  ListLikesCountResponse,
+} from './types'
+
+export function fetchFeeds(input: FetchFeedsRequest, authRequired = false) {
+  return postJson<FetchFeedsResponse>('/feed/list', input, authRequired ? { authRequired: true } : undefined)
+}
 
 export function listLatest(input: { limit: number; latest_time: number }) {
   return postJson<ListLatestResponse>('/feed/listLatest', input)

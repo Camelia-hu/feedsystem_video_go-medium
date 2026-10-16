@@ -61,6 +61,7 @@ async function goSettings() {
         <RouterLink class="dy-nav-link" to="/hot">热榜</RouterLink>
         <RouterLink class="dy-nav-link" to="/video">发布</RouterLink>
         <RouterLink class="dy-nav-link" to="/account">账号</RouterLink>
+        <RouterLink class="dy-nav-link" to="/wallet">钱包</RouterLink>
         <RouterLink class="dy-nav-link" to="/settings">设置</RouterLink>
       </nav>
 

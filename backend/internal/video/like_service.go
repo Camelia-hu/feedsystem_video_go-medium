@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"errors"
+	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"time"
@@ -68,6 +69,8 @@ func (s *LikeService) Like(ctx context.Context, like *Like) error {
 		}
 	}
 	if mysqlEnqueued && redisEnqueued {
+		// 记录点赞指标
+		metrics.LikeActionTotal.WithLabelValues("like").Inc()
 		return nil
 	}
 
@@ -144,6 +147,8 @@ func (s *LikeService) Unlike(ctx context.Context, like *Like) error {
 		}
 	}
 	if mysqlEnqueued && redisEnqueued {
+		// 记录取消点赞指标
+		metrics.LikeActionTotal.WithLabelValues("unlike").Inc()
 		return nil
 	}
 

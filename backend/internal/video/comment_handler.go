@@ -92,3 +92,21 @@ func (h *CommentHandler) GetAllComments(c *gin.Context) {
 	}
 	c.JSON(200, comments)
 }
+
+// AdminDeleteComment 管理员删除评论（不检查作者权限）
+func (h *CommentHandler) AdminDeleteComment(c *gin.Context) {
+	var req DeleteCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if req.CommentID <= 0 {
+		c.JSON(400, gin.H{"error": "comment_id is required"})
+		return
+	}
+	if err := h.service.AdminDelete(c.Request.Context(), req.CommentID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"message": "comment deleted by admin"})
+}

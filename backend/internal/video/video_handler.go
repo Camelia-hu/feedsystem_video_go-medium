@@ -104,8 +104,8 @@ func (vh *VideoHandler) UploadVideo(c *gin.Context) {
 	urlPath := path.Join("/static", "videos", fmt.Sprintf("%d", authorId), date, filename)
 
 	c.JSON(http.StatusOK, gin.H{
-		"url":      buildAbsoluteURL(c, urlPath),
-		"play_url": buildAbsoluteURL(c, urlPath),
+		"url":      urlPath,
+		"play_url": urlPath,
 	})
 }
 
@@ -156,8 +156,8 @@ func (vh *VideoHandler) UploadCover(c *gin.Context) {
 	urlPath := path.Join("/static", "covers", fmt.Sprintf("%d", authorId), date, filename)
 
 	c.JSON(http.StatusOK, gin.H{
-		"url":       buildAbsoluteURL(c, urlPath),
-		"cover_url": buildAbsoluteURL(c, urlPath),
+		"url":       urlPath,
+		"cover_url": urlPath,
 	})
 }
 
@@ -167,16 +167,6 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func buildAbsoluteURL(c *gin.Context, p string) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
-		scheme = xf
-	}
-	return fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, p)
-}
 
 func (vh *VideoHandler) DeleteVideo(c *gin.Context) {
 	var req DeleteVideoRequest
@@ -202,7 +192,7 @@ func (vh *VideoHandler) ListByAuthorID(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	videos, err := vh.service.ListByAuthorID(c.Request.Context(), req.AuthorID)
+	videos, err := vh.service.ListByAuthorID(c.Request.Context(), req.AuthorID, req.Offset)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -235,4 +225,18 @@ func (vh *VideoHandler) UpdateLikesCount(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"message": "likes count updated"})
+}
+
+// AdminDeleteVideo 管理员删除视频（不检查作者权限）
+func (vh *VideoHandler) AdminDeleteVideo(c *gin.Context) {
+	var req DeleteVideoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if err := vh.service.AdminDelete(c.Request.Context(), req.ID); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"message": "video deleted by admin"})
 }

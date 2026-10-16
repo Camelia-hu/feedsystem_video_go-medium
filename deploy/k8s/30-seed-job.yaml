@@ -1,0 +1,30 @@
+# 一次性 seed Job：向 MySQL 批量插入测试视频（供 feed/压测用）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: feedsystem
+spec:
+  template:
+    metadata:
+      labels:
+        app: seed
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: feedsystem/seed:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--count=1000"
+            - "--author=1"
+            - "--config=configs/config.yaml"
+          envFrom:
+            - configMapRef:
+                name: feedsystem-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: feedsystem-secrets
+                  key: mysql-root-password

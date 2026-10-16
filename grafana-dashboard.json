@@ -1,0 +1,125 @@
+{
+  "dashboard": {
+    "title": "FeedSystem 短视频系统监控",
+    "tags": ["feedsystem", "video", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "QPS - 每秒请求数",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (path)",
+            "legendFormat": "{{path}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "P99 延迟",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, path))",
+            "legendFormat": "{{path}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "缓存命中率",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(cache_hits_total[1m])) by (cache_type) / (sum(rate(cache_hits_total[1m])) by (cache_type) + sum(rate(cache_misses_total[1m])) by (cache_type))",
+            "legendFormat": "{{cache_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "MQ 消费速率",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(mq_consume_total[1m])) by (queue, status)",
+            "legendFormat": "{{queue}} - {{status}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "业务指标 - 视频/点赞/评论/关注",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(video_publish_total[5m])",
+            "legendFormat": "视频发布"
+          },
+          {
+            "expr": "sum(rate(like_action_total[5m])) by (action)",
+            "legendFormat": "点赞 - {{action}}"
+          },
+          {
+            "expr": "sum(rate(comment_action_total[5m])) by (action)",
+            "legendFormat": "评论 - {{action}}"
+          },
+          {
+            "expr": "sum(rate(follow_action_total[5m])) by (action)",
+            "legendFormat": "关注 - {{action}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "推拉混合架构 - 写扩散粉丝数分布",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(inbox_fanout_size_bucket[5m])) by (le))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(inbox_fanout_size_bucket[5m])) by (le))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(inbox_fanout_size_bucket[5m])) by (le))",
+            "legendFormat": "P99"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "热榜缓存命中率",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(hot_rank_cache_hit[1m]) / (rate(hot_rank_cache_hit[1m]) + rate(hot_rank_cache_miss[1m]))",
+            "legendFormat": "命中率"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "大 V 跳过写扩散比例",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(big_v_skip_count[5m]) / (rate(inbox_fanout_total[5m]) + rate(big_v_skip_count[5m]))",
+            "legendFormat": "跳过比例"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ]
+  }
+}

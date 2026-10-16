@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"errors"
+	"feedsystem_video_go/internal/middleware/metrics"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"strings"
@@ -56,6 +57,8 @@ func (s *CommentService) Publish(ctx context.Context, comment *Comment) error {
 		}
 	}
 	if mysqlEnqueued && redisEnqueued {
+		// 记录评论发布指标
+		metrics.CommentActionTotal.WithLabelValues("publish").Inc()
 		return nil
 	}
 
@@ -96,12 +99,71 @@ func (s *CommentService) Delete(ctx context.Context, commentID uint, accountID u
 	if comment.AuthorID != accountID {
 		return errors.New("permission denied")
 	}
+
+	mqEnqueued := false
 	if s.commentMQ != nil {
 		if err := s.commentMQ.Delete(ctx, commentID); err == nil {
-			return nil
+			mqEnqueued = true
 		}
 	}
-	return s.repo.DeleteComment(ctx, comment)
+	if !mqEnqueued {
+		if err := s.repo.DeleteComment(ctx, comment); err != nil {
+			return err
+		}
+	}
+
+	// 记录评论删除指标
+	metrics.CommentActionTotal.WithLabelValues("delete").Inc()
+
+	// 扣减视频热度（无论走 MQ 还是直写，popularity 都要 -1）
+	if s.popularityMQ != nil {
+		if err := s.popularityMQ.Update(ctx, comment.VideoID, -1); err != nil {
+			// MQ 失败时降级直写缓存
+			UpdatePopularityCache(ctx, s.cache, comment.VideoID, -1)
+		}
+	} else {
+		UpdatePopularityCache(ctx, s.cache, comment.VideoID, -1)
+	}
+
+	return nil
+}
+
+// AdminDelete 管理员删除评论（不检查作者权限）
+func (s *CommentService) AdminDelete(ctx context.Context, commentID uint) error {
+	comment, err := s.repo.GetByID(ctx, commentID)
+	if err != nil {
+		return err
+	}
+	if comment == nil {
+		return errors.New("comment not found")
+	}
+
+	mqEnqueued := false
+	if s.commentMQ != nil {
+		if err := s.commentMQ.Delete(ctx, commentID); err == nil {
+			mqEnqueued = true
+		}
+	}
+	if !mqEnqueued {
+		if err := s.repo.DeleteComment(ctx, comment); err != nil {
+			return err
+		}
+	}
+
+	// 记录评论删除指标
+	metrics.CommentActionTotal.WithLabelValues("delete").Inc()
+
+	// 扣减视频热度（无论走 MQ 还是直写，popularity 都要 -1）
+	if s.popularityMQ != nil {
+		if err := s.popularityMQ.Update(ctx, comment.VideoID, -1); err != nil {
+			// MQ 失败时降级直写缓存
+			UpdatePopularityCache(ctx, s.cache, comment.VideoID, -1)
+		}
+	} else {
+		UpdatePopularityCache(ctx, s.cache, comment.VideoID, -1)
+	}
+
+	return nil
 }
 
 func (s *CommentService) GetAll(ctx context.Context, videoID uint) ([]Comment, error) {

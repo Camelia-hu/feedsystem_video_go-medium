@@ -1,0 +1,76 @@
+# rank-worker：热度榜 worker（消费 popularity 事件，写 Redis ZSET），只需 Redis + RabbitMQ
+apiVersion: v1
+kind: Service
+metadata:
+  name: rank-worker
+  namespace: feedsystem
+  labels:
+    app: rank-worker
+spec:
+  type: ClusterIP
+  selector:
+    app: rank-worker
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rank-worker
+  namespace: feedsystem
+  labels:
+    app: rank-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rank-worker
+  template:
+    metadata:
+      labels:
+        app: rank-worker
+    spec:
+      containers:
+        - name: rank-worker
+          image: feedsystem/rank-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: feedsystem-config
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: feedsystem-secrets
+                  key: redis-password
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: feedsystem-secrets
+                  key: rabbitmq-password
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
