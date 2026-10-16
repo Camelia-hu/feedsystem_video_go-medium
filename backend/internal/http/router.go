@@ -2,6 +2,7 @@ package http
 
 import (
 	"feedsystem_video_go/internal/account"
+	"feedsystem_video_go/internal/fault"
 	"feedsystem_video_go/internal/feed"
 	"feedsystem_video_go/internal/middleware/jwt"
 	"feedsystem_video_go/internal/middleware/localcache"
@@ -26,6 +27,10 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 
 	// Prometheus metrics 端点
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// 故障注入：内存态开关 + /debug/fault 路由（演示用，主动制造可复现的故障）
+	injector := fault.NewInjector()
+	registerFaultRoutes(r, injector)
 
 	r.Static("/static", "./.run/uploads")
 
@@ -165,6 +170,10 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	feedHandler := feed.NewFeedHandler(feedService)
 	feedGroup := r.Group("/feed")
 	feedGroup.Use(jwt.SoftJWTAuth(accountRepository, cache))
+	// 故障注入中间件：只作用于 feed 链路，避免波及支付等写路径
+	feedGroup.Use(slowSQLMiddleware(db, injector))
+	feedGroup.Use(cacheBreakdownMiddleware(cache, injector))
+	feedGroup.Use(errorRateMiddleware(injector))
 	{
 		// 统一入口：通过 query_type 分派（latest/order_by_likes/order_by_popularity/followings）
 		feedGroup.POST("/list", feedHandler.FetchFeeds)
